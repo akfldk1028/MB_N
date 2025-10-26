@@ -97,14 +97,25 @@ public class PlankManager
     public void UpdateMovement(float deltaTime)
     {
         if (!_enabled || _plank == null || _inputManager == null) return;
-        
+
+        // ✅ 멀티플레이: Owner만 입력 처리 (BaseObject는 NetworkBehaviour 상속)
+        var baseObject = _plank as Unity.Assets.Scripts.Objects.BaseObject;
+        if (baseObject != null && baseObject.IsSpawned)
+        {
+            // NetworkObject로 스폰된 경우 Owner만 입력 처리
+            if (!baseObject.IsOwner)
+            {
+                return; // 다른 플레이어의 패들은 조작 불가
+            }
+        }
+
         // 현재 입력 타입에 따라 이동 처리
         switch (_inputManager.CurrentInputType)
         {
             case InputManager.InputType.Keyboard:
                 ProcessKeyboardMovement(deltaTime);
                 break;
-                
+
             case InputManager.InputType.Mouse:
             case InputManager.InputType.Touch:
                 ProcessPointerMovement();

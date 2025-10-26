@@ -68,6 +68,18 @@ namespace Unity.Assets.Scripts.Objects
         // 네트워크 변수
         private NetworkVariable<int> _syncedBallCount = new NetworkVariable<int>(1);
         private NetworkVariable<EBallState> _syncedState = new NetworkVariable<EBallState>(EBallState.None); // 상태 동기화 (여기서 정의)
+
+        // 위치/속도 동기화 (NetworkTransform 대신 수동 동기화)
+        private NetworkVariable<Vector3> _syncedPosition = new NetworkVariable<Vector3>(
+            Vector3.zero,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server
+        );
+        private NetworkVariable<Vector2> _syncedVelocity = new NetworkVariable<Vector2>(
+            Vector2.zero,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server
+        );
         
         // 시스템 변수
         private Camera mainCamera;
@@ -154,15 +166,19 @@ namespace Unity.Assets.Scripts.Objects
             {
                 UpdateStateMachine();
             }
-                UpdatePowerStatus();
+            else if (IsClient && IsSpawned)
+            {
+                // 클라이언트: 서버 위치로 부드럽게 보간
+                InterpolateToServerPosition();
+            }
 
-
+            UpdatePowerStatus();
         }
         
         protected override void FixedUpdate()
         {
             base.FixedUpdate(); // 부모 FixedUpdate 호출 (이전 상태 기록 등)
-            
+
             // 서버에서만 물리 관련 업데이트 수행
              if (IsServer || !IsSpawned) // 로컬 테스트용으로 !IsSpawned 추가
              {
@@ -170,6 +186,12 @@ namespace Unity.Assets.Scripts.Objects
                  if (CurrentState == EBallState.Moving && rb != null && !rb.isKinematic)
                  {
                      UpdateMovingPhysics();
+                 }
+
+                 // 서버: NetworkVariable에 위치/속도 동기화 (스폰된 경우에만)
+                 if (IsSpawned)
+                 {
+                     SyncPositionToClients();
                  }
              }
         }
@@ -208,38 +230,67 @@ namespace Unity.Assets.Scripts.Objects
             {
                 _syncedBallCount.Value = ballCount;
                 _syncedState.Value = CurrentState; // 초기 상태 동기화
+                _syncedPosition.Value = transform.position;
+                if (rb != null)
+                {
+                    _syncedVelocity.Value = rb.linearVelocity;
+                }
             }
 
             if (IsClient)
             {
                 _syncedBallCount.OnValueChanged += OnBallCountChanged;
                 _syncedState.OnValueChanged += OnStateChanged; // 상태 변경 콜백 등록
+                _syncedPosition.OnValueChanged += OnPositionChanged;
+                _syncedVelocity.OnValueChanged += OnVelocityChanged;
 
                  // 클라이언트는 서버로부터 받은 상태를 즉시 적용
                 CurrentState = _syncedState.Value;
+                transform.position = _syncedPosition.Value;
+                if (rb != null && !IsServer)
+                {
+                    rb.linearVelocity = _syncedVelocity.Value;
+                }
             }
         }
         
         public override void OnNetworkDespawn()
         {
             base.OnNetworkDespawn();
-            
+
             if (IsClient)
             {
                 _syncedBallCount.OnValueChanged -= OnBallCountChanged;
                 _syncedState.OnValueChanged -= OnStateChanged; // 상태 변경 콜백 해제
+                _syncedPosition.OnValueChanged -= OnPositionChanged;
+                _syncedVelocity.OnValueChanged -= OnVelocityChanged;
             }
         }
         
         // 네트워크 콜백 메서드들
         private void OnBallCountChanged(int previousValue, int newValue){ ballCount = newValue;}
-        
+
         private void OnStateChanged(EBallState previousValue, EBallState newValue)
         {
             // 클라이언트는 서버로부터 받은 상태를 적용
             if (!IsServer)
             {
                  CurrentState = newValue;
+            }
+        }
+
+        private void OnPositionChanged(Vector3 previousValue, Vector3 newValue)
+        {
+            // 클라이언트에서는 보간을 위해 직접 적용하지 않음
+            // Update()에서 Lerp로 부드럽게 이동
+        }
+
+        private void OnVelocityChanged(Vector2 previousValue, Vector2 newValue)
+        {
+            // 클라이언트에서 속도 정보 업데이트 (참고용)
+            if (!IsServer && rb != null)
+            {
+                // 클라이언트는 물리 시뮬레이션 하지 않으므로 속도는 참고만
             }
         }
         #endregion
@@ -337,6 +388,43 @@ namespace Unity.Assets.Scripts.Objects
             return isLast;
         }
         
+        // 서버에서 클라이언트로 위치/속도 동기화
+        private void SyncPositionToClients()
+        {
+            if (!IsServer) return;
+
+            // 위치가 크게 변했을 때만 업데이트 (최적화)
+            float positionDiff = Vector3.Distance(transform.position, _syncedPosition.Value);
+            if (positionDiff > 0.01f)
+            {
+                _syncedPosition.Value = transform.position;
+            }
+
+            // 속도 업데이트
+            if (rb != null && !rb.isKinematic)
+            {
+                Vector2 velocityDiff = rb.linearVelocity - _syncedVelocity.Value;
+                if (velocityDiff.sqrMagnitude > 0.01f)
+                {
+                    _syncedVelocity.Value = rb.linearVelocity;
+                }
+            }
+        }
+
+        // 클라이언트에서 서버 위치로 보간
+        private void InterpolateToServerPosition()
+        {
+            if (IsServer || !IsSpawned) return;
+
+            // 위치 보간 (부드럽게 이동)
+            float interpolationSpeed = 10f;
+            transform.position = Vector3.Lerp(
+                transform.position,
+                _syncedPosition.Value,
+                Time.deltaTime * interpolationSpeed
+            );
+        }
+
         // 기즈모 렌더링
         protected override void OnDrawGizmos()
         {
