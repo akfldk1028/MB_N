@@ -19,7 +19,7 @@ using UnityEngine.Pool;
 internal class Pool
 {
 	private GameObject _prefab;
-	private IObjectPool<GameObject> _pool;
+	private UnityEngine.Pool.IObjectPool<GameObject> _pool;
 
 	private Transform _root;
 	private Transform Root
@@ -39,7 +39,7 @@ internal class Pool
 	public Pool(GameObject prefab)
 	{
 		_prefab = prefab;
-		_pool = new ObjectPool<GameObject>(OnCreate, OnGet, OnRelease, OnDestroy);
+		_pool = new UnityEngine.Pool.ObjectPool<GameObject>(OnCreate, OnGet, OnRelease, OnDestroy);
 	}
 
 	public void Push(GameObject go)
@@ -83,7 +83,7 @@ public class PoolManager
 {
 	public PoolManager()
 	{
-		Debug.Log("<color=green>[PoolManager]</color> 생성됨");
+		GameLogger.SystemStart("PoolManager", "생성됨");
 	}
 	
 	private Dictionary<string, Pool> _pools = new Dictionary<string, Pool>();

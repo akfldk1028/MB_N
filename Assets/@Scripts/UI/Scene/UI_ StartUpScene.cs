@@ -56,12 +56,18 @@ public class UI_StartUpScene : UI_Scene
     {
         GameLogger.SystemStart("UI_StartUpScene", "게임 시작 버튼 클릭!");
         
-        // 1. 멀티플레이어 세션 시작
-        await StartMultiplayerSession();
+        // 1인 모드: 네트워크 없이 바로 게임 시작
+        if (Managers.GameMode.IsLocalTest)
+        {
+            GameLogger.Network("UI_StartUpScene", "1인 테스트 모드 - 바로 게임 시작");
+            Managers.Scene.LoadScene(EScene.GameScene);
+            return;
+        }
         
-        // 2. 게임 씬으로 전환
-        GameLogger.Success("UI_StartUpScene", "게임 씬으로 전환");
-        Managers.Scene.LoadScene(EScene.GameScene);
+        // 2인 모드: 멀티플레이어 세션 시작 (씬 전환은 ConnectionManager가 처리)
+        GameLogger.Network("UI_StartUpScene", "2인 매칭 모드 - 세션 시작");
+        await StartMultiplayerSession();
+        // 씬 전환은 ConnectionManagerEx.OnClientConnectedCallback()에서 처리
     }
 
     /// <summary>

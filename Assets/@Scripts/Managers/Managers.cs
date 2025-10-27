@@ -42,6 +42,10 @@ public class Managers : MonoBehaviour
     private LocalLobbyUserEx _localUser;
     private SessionManager _sessionManager;
     private DebugClassFacadeEx _debugFacade;
+    
+    // 게임 모드 및 로비 관리 서비스
+    private GameModeService _gameModeService = new GameModeService();
+    private LobbyCleanupService _lobbyCleanupService = new LobbyCleanupService();
 
     // 네트워크 컴포넌트 public 접근자
     public static NetworkManager Network => Instance?._networkManager;
@@ -53,6 +57,8 @@ public class Managers : MonoBehaviour
     public static LocalLobbyUserEx LocalUser => Instance?._localUser;
     public static SessionManager Session => Instance?._sessionManager;
     public static DebugClassFacadeEx Debug => Instance?._debugFacade;
+    public static GameModeService GameMode => Instance?._gameModeService;
+    public static LobbyCleanupService LobbyCleanup => Instance?._lobbyCleanupService;
     #endregion
 
     #region Contents
@@ -208,12 +214,12 @@ public class Managers : MonoBehaviour
     {
         GameLogger.Progress("Managers", "NetworkManager 설정 시작...");
 
-        // 1. UnityTransport 추가 및 설정
+        // 1. UnityTransport 추가 및 WebSocket 활성화
         var transport = networkGo.AddComponent<UnityTransport>();
-        transport.ConnectionData.Address = "127.0.0.1"; // 로컬호스트 (Relay 사용 시 자동 변경됨)
-        transport.ConnectionData.Port = 7777;
-        transport.ConnectionData.ServerListenAddress = "0.0.0.0";
-        GameLogger.Info("Managers", "UnityTransport 설정 완료 (127.0.0.1:7777)");
+        
+        // ✅ WebSocket 모드 활성화 (Relay는 WebSocket 사용)
+        transport.UseWebSockets = true;
+        GameLogger.Success("Managers", "UnityTransport 설정 완료 (WebSocket 모드)");
 
         // 2. NetworkConfig 생성 및 설정
         var config = new NetworkConfig
@@ -221,11 +227,11 @@ public class Managers : MonoBehaviour
             NetworkTransport = transport,
             TickRate = 60,
             ClientConnectionBufferTimeout = 10,
-            ConnectionApproval = false, // 일단 false, 나중에 승인 로직 추가 가능
+            ConnectionApproval = true,  // ConnectionManagerEx에서 필요
             EnableSceneManagement = true,
             ForceSamePrefabs = true
         };
-        GameLogger.Info("Managers", "NetworkConfig 설정 완료 (TickRate: 60)");
+        GameLogger.Info("Managers", "NetworkConfig 설정 완료 (TickRate: 60, Approval: ON)");
 
         // 3. NetworkPrefabsList 로드 (ResourceManager 위임)
         var prefabsList = await _resource.LoadNetworkPrefabsListAsync();
@@ -254,57 +260,63 @@ public class Managers : MonoBehaviour
     /// </summary>
     private Task ValidateMultiplayerCapabilities()
     {
-        UnityEngine.Debug.Log("<color=cyan>[Managers] 🔍 멀티플레이어 기능 검증 시작</color>");
+        GameLogger.SystemStart("Managers", "멀티플레이어 기능 검증 시작");
 
         // Unity Services 상태 확인
         bool servicesReady = UnityServices.State == ServicesInitializationState.Initialized;
-        UnityEngine.Debug.Log($"<color={(servicesReady ? "green" : "red")}>[Managers] Unity Services: {(servicesReady ? "✅ 준비됨" : "❌ 미준비")}</color>");
+        if (servicesReady) GameLogger.Success("Managers", "Unity Services: 준비됨");
+        else GameLogger.Error("Managers", "Unity Services: 미준비");
 
         // Authentication 서비스 확인
         bool authReady = _authManager != null;
-        UnityEngine.Debug.Log($"<color={(authReady ? "green" : "red")}>[Managers] Authentication: {(authReady ? "✅ 준비됨" : "❌ 미준비")}</color>");
+        if (authReady) GameLogger.Success("Managers", "Authentication: 준비됨");
+        else GameLogger.Error("Managers", "Authentication: 미준비");
 
         // NetworkManager 확인
         bool networkReady = _networkManager != null;
-        UnityEngine.Debug.Log($"<color={(networkReady ? "green" : "red")}>[Managers] NetworkManager: {(networkReady ? "✅ 준비됨" : "❌ 미준비")}</color>");
+        if (networkReady) GameLogger.Success("Managers", "NetworkManager: 준비됨");
+        else GameLogger.Error("Managers", "NetworkManager: 미준비");
 
         // ConnectionManager 확인
         bool connectionReady = _connectionManager != null;
-        UnityEngine.Debug.Log($"<color={(connectionReady ? "green" : "red")}>[Managers] ConnectionManager: {(connectionReady ? "✅ 준비됨" : "❌ 미준비")}</color>");
+        if (connectionReady) GameLogger.Success("Managers", "ConnectionManager: 준비됨");
+        else GameLogger.Error("Managers", "ConnectionManager: 미준비");
 
         // Lobby 서비스 확인
         bool lobbyReady = _lobbyServiceFacade != null && _localLobby != null && _localUser != null;
-        UnityEngine.Debug.Log($"<color={(lobbyReady ? "green" : "red")}>[Managers] Lobby System: {(lobbyReady ? "✅ 준비됨" : "❌ 미준비")}</color>");
+        if (lobbyReady) GameLogger.Success("Managers", "Lobby System: 준비됨");
+        else GameLogger.Error("Managers", "Lobby System: 미준비");
 
         // Session 관리 확인
         bool sessionReady = _sessionManager != null;
-        UnityEngine.Debug.Log($"<color={(sessionReady ? "green" : "red")}>[Managers] Session Manager: {(sessionReady ? "✅ 준비됨" : "❌ 미준비")}</color>");
+        if (sessionReady) GameLogger.Success("Managers", "Session Manager: 준비됨");
+        else GameLogger.Error("Managers", "Session Manager: 미준비");
 
         // 전체 멀티플레이어 준비 상태
         bool allReady = servicesReady && authReady && networkReady && connectionReady && lobbyReady && sessionReady;
         
         if (allReady)
         {
-            UnityEngine.Debug.Log("<color=green>[Managers] 🎉 멀티플레이어 시스템 모든 준비 완료!</color>");
-            UnityEngine.Debug.Log("<color=lime>[Managers] 📡 로비 생성/참가 가능</color>");
-            UnityEngine.Debug.Log("<color=lime>[Managers] 🔗 클라이언트/호스트 연결 가능</color>");
-            UnityEngine.Debug.Log("<color=lime>[Managers] 💾 세션 데이터 동기화 가능</color>");
+            GameLogger.Success("Managers", "🎉 멀티플레이어 시스템 모든 준비 완료!");
+            GameLogger.Network("Managers", "📡 로비 생성/참가 가능");
+            GameLogger.Network("Managers", "🔗 클라이언트/호스트 연결 가능");
+            GameLogger.Network("Managers", "💾 세션 데이터 동기화 가능");
         }
         else
         {
-            UnityEngine.Debug.LogWarning("<color=orange>[Managers] ⚠️ 일부 멀티플레이어 기능이 준비되지 않았습니다</color>");
+            GameLogger.Warning("Managers", "⚠️ 일부 멀티플레이어 기능이 준비되지 않았습니다");
         }
 
         // 인터넷 연결 상태 확인
         var internetReachability = Application.internetReachability;
         string connectionStatus = internetReachability switch
         {
-            NetworkReachability.NotReachable => "<color=red>❌ 인터넷 연결 없음</color>",
-            NetworkReachability.ReachableViaCarrierDataNetwork => "<color=green>✅ 모바일 데이터 연결</color>",
-            NetworkReachability.ReachableViaLocalAreaNetwork => "<color=green>✅ WiFi/LAN 연결</color>",
-            _ => "<color=yellow>⚠️ 연결 상태 불명</color>"
+            NetworkReachability.NotReachable => "인터넷 연결 없음",
+            NetworkReachability.ReachableViaCarrierDataNetwork => "모바일 데이터 연결",
+            NetworkReachability.ReachableViaLocalAreaNetwork => "WiFi/LAN 연결",
+            _ => "연결 상태 불명"
         };
-        UnityEngine.Debug.Log($"<color=cyan>[Managers] 🌐 인터넷 상태: {connectionStatus}</color>");
+        GameLogger.Network("Managers", $"🌐 인터넷 상태: {connectionStatus}");
         
         return Task.CompletedTask;
     }
