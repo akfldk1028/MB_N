@@ -129,7 +129,23 @@ namespace Unity.Assets.Scripts.Objects
             Debug.Log($"<color=green>[Ball] Init: Ball 컴포넌트 초기화됨, 볼 개수: {ballCount}</color>");
             return true;
         }
-        
+
+        /// <summary>
+        /// Plank 참조 설정 (멀티플레이어 스포너에서 사용)
+        /// </summary>
+        public void SetPlank(PhysicsPlank plankReference)
+        {
+            plank = plankReference;
+            if (plank != null)
+            {
+                _plankCollider = plank.GetComponent<Collider2D>();
+                if (_plankCollider == null)
+                {
+                    GameLogger.Warning("PhysicsBall", $"{gameObject.name}: SetPlank - 패들에 Collider2D가 없습니다!");
+                }
+            }
+        }
+
         protected virtual void Start() // virtual로 선언하여 혹시 모를 자식 클래스 오버라이드 허용
         {
             // 패들 Collider 캐싱
@@ -166,9 +182,10 @@ namespace Unity.Assets.Scripts.Objects
             {
                 UpdateStateMachine();
             }
-            else if (IsClient && IsSpawned)
+            // ✅ 수정: IsClient → !IsServer (클라이언트만 보간)
+            else if (!IsServer && IsSpawned)
             {
-                // 클라이언트: 서버 위치로 부드럽게 보간
+                // 클라이언트 전용: 서버 위치로 부드럽게 보간
                 InterpolateToServerPosition();
             }
 
@@ -228,8 +245,9 @@ namespace Unity.Assets.Scripts.Objects
 
             if (IsServer)
             {
+                // 서버(Host 포함): NetworkVariable 초기화
                 _syncedBallCount.Value = ballCount;
-                _syncedState.Value = CurrentState; // 초기 상태 동기화
+                _syncedState.Value = CurrentState;
                 _syncedPosition.Value = transform.position;
                 if (rb != null)
                 {
@@ -237,17 +255,19 @@ namespace Unity.Assets.Scripts.Objects
                 }
             }
 
-            if (IsClient)
+            // ✅ 수정: IsClient → !IsServer (Host는 서버 로직만 실행)
+            if (!IsServer)
             {
+                // 클라이언트 전용: 서버 값 구독
                 _syncedBallCount.OnValueChanged += OnBallCountChanged;
-                _syncedState.OnValueChanged += OnStateChanged; // 상태 변경 콜백 등록
+                _syncedState.OnValueChanged += OnStateChanged;
                 _syncedPosition.OnValueChanged += OnPositionChanged;
                 _syncedVelocity.OnValueChanged += OnVelocityChanged;
 
-                 // 클라이언트는 서버로부터 받은 상태를 즉시 적용
+                // 클라이언트는 서버로부터 받은 상태를 즉시 적용
                 CurrentState = _syncedState.Value;
                 transform.position = _syncedPosition.Value;
-                if (rb != null && !IsServer)
+                if (rb != null)
                 {
                     rb.linearVelocity = _syncedVelocity.Value;
                 }
@@ -258,10 +278,11 @@ namespace Unity.Assets.Scripts.Objects
         {
             base.OnNetworkDespawn();
 
-            if (IsClient)
+            // ✅ 수정: IsClient → !IsServer
+            if (!IsServer)
             {
                 _syncedBallCount.OnValueChanged -= OnBallCountChanged;
-                _syncedState.OnValueChanged -= OnStateChanged; // 상태 변경 콜백 해제
+                _syncedState.OnValueChanged -= OnStateChanged;
                 _syncedPosition.OnValueChanged -= OnPositionChanged;
                 _syncedVelocity.OnValueChanged -= OnVelocityChanged;
             }
@@ -503,10 +524,16 @@ namespace Unity.Assets.Scripts.Objects
                 {
                     transform.position = targetPosition;
                 }
-                
+
+                // ✅ 멀티플레이: Owner만 입력 처리 (다른 플레이어가 내 공을 발사하지 못하도록)
+                if (IsSpawned && !IsOwner)
+                {
+                    return; // 다른 플레이어의 공은 조작 불가
+                }
+
                 // 입력 감지: 마우스 클릭 또는 스페이스바로 발사
                 bool launchInput = Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.Space);
-                
+
                 if (launchInput)
                 {
                     LaunchBall(launchDirection); // 설정된 기본 방향으로 발사

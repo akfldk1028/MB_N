@@ -67,22 +67,28 @@ public class BrickGameMultiplayerSpawner : NetworkBehaviour
             GameLogger.Success("BrickGameMultiplayerSpawner", $"Ball 프리팹 로드 완료: {_ballPrefab.name}");
         }
 
-        // Plank는 씬에서 찾거나 프리팹으로 생성
-        // 방법 1: 씬의 기존 Plank를 복제
-        PhysicsPlank existingPlank = FindObjectOfType<PhysicsPlank>();
-        if (existingPlank != null)
+        // ✅ 수정: Plank는 프리팹 우선, 씬 오브젝트는 폴백
+        // 방법 1: Resources에서 프리팹 로드 시도
+        _plankPrefab = Resources.Load<GameObject>("GameScene/Plank");
+        if (_plankPrefab != null)
         {
-            // 기존 Plank를 프리팹화 (런타임에 복제용)
-            _plankPrefab = existingPlank.gameObject;
-            GameLogger.Success("BrickGameMultiplayerSpawner", $"Plank 원본 발견: {_plankPrefab.name}");
+            GameLogger.Success("BrickGameMultiplayerSpawner", $"Plank 프리팹 로드 완료: {_plankPrefab.name}");
         }
         else
         {
-            GameLogger.Warning("BrickGameMultiplayerSpawner", "씬에서 PhysicsPlank를 찾을 수 없습니다. Resources에서 로드 시도...");
-            _plankPrefab = Resources.Load<GameObject>("GameScene/Plank");
-            if (_plankPrefab == null)
+            // 방법 2: 씬의 기존 Plank를 복제용으로 사용 (폴백)
+            GameLogger.Warning("BrickGameMultiplayerSpawner", "Resources에서 Plank 프리팹을 찾을 수 없습니다. 씬 오브젝트 사용...");
+            PhysicsPlank existingPlank = FindObjectOfType<PhysicsPlank>();
+            if (existingPlank != null)
             {
-                GameLogger.Error("BrickGameMultiplayerSpawner", "Plank 프리팹을 찾을 수 없습니다!");
+                _plankPrefab = existingPlank.gameObject;
+                // ⚠️ 씬의 Plank는 비활성화 (멀티플레이어 스폰용으로만 사용)
+                existingPlank.gameObject.SetActive(false);
+                GameLogger.Success("BrickGameMultiplayerSpawner", $"Plank 씬 오브젝트 사용 (비활성화됨): {_plankPrefab.name}");
+            }
+            else
+            {
+                GameLogger.Error("BrickGameMultiplayerSpawner", "Plank를 찾을 수 없습니다! Resources/GameScene/Plank.prefab 또는 씬에 PhysicsPlank 필요");
             }
         }
     }
@@ -252,20 +258,12 @@ public class BrickGameMultiplayerSpawner : NetworkBehaviour
         PhysicsBall ball = ballObject.GetComponent<PhysicsBall>();
         if (ball != null)
         {
-            // Plank 참조 설정
+            // Plank 참조 설정 (✅ Reflection 제거, public 메서드 사용)
             PhysicsPlank plank = plankObject.GetComponent<PhysicsPlank>();
             if (plank != null)
             {
-                // Reflection 또는 public field로 plank 설정
-                var field = typeof(PhysicsBall).GetField("plank",
-                    System.Reflection.BindingFlags.NonPublic |
-                    System.Reflection.BindingFlags.Public |
-                    System.Reflection.BindingFlags.Instance);
-
-                if (field != null)
-                {
-                    field.SetValue(ball, plank);
-                }
+                ball.SetPlank(plank);
+                GameLogger.Success("BrickGameMultiplayerSpawner", $"  🔗 Ball-Plank 연결 완료");
             }
         }
 
