@@ -15,7 +15,7 @@ public class ReleaseGameManager : MonoBehaviour
     // -------------------------------
 
     private bool isGameActive = false;
-    // private BrickGameManager _brickGameManager; // BrickGameManager 참조
+    private BrickGameManager _brickGameManager; // BrickGameManager 참조
     private int _latestScore = 0; // 최신 점수 저장
     
     // --- Cannon 참조 변경 ---
@@ -41,17 +41,17 @@ public class ReleaseGameManager : MonoBehaviour
         OnGameStart?.Invoke();
 
         // --- BrickGameManager 찾기 ---
-        // _brickGameManager = FindObjectOfType<BrickGameManager>();
-        // if (_brickGameManager != null)
-        // {
-        //     _latestScore = _brickGameManager.GetCurrentScore();
-        //     _brickGameManager.OnScoreChanged += HandleScoreChange;
-        //     Debug.Log($"<color=green>[ReleaseGameManager] Initial Score: {_latestScore}</color> ");
-        // }
-        // else
-        // {
-        //      Debug.LogError($"<color=red>[ReleaseGameManager] BrickGameManager를 찾을 수 없습니다!</color> ");
-        // }
+        _brickGameManager = FindObjectOfType<BrickGameManager>();
+        if (_brickGameManager != null)
+        {
+            _latestScore = _brickGameManager.GetCurrentScore();
+            _brickGameManager.OnScoreChanged += HandleScoreChange;
+            Debug.Log($"<color=green>[ReleaseGameManager] Initial Score: {_latestScore}</color> ");
+        }
+        else
+        {
+             Debug.LogError($"<color=red>[ReleaseGameManager] BrickGameManager를 찾을 수 없습니다!</color> ");
+        }
         
         // --- IsometricGridGenerator에서 캐논 배열 가져오기 ---
         if (IsometricGridGenerator.Instance != null)
@@ -75,11 +75,11 @@ public class ReleaseGameManager : MonoBehaviour
     private void OnDestroy()
     {
         // --- 이벤트 구독 해지 ---
-        // if (_brickGameManager != null)
-        // {
-        //     _brickGameManager.OnScoreChanged -= HandleScoreChange;
-        //     Debug.Log("[ReleaseGameManager] Unsubscribed from OnScoreChanged event.");
-        // }
+        if (_brickGameManager != null)
+        {
+            _brickGameManager.OnScoreChanged -= HandleScoreChange;
+            Debug.Log("[ReleaseGameManager] Unsubscribed from OnScoreChanged event.");
+        }
         
         // UI_BasicGameScene.OnSummonButtonUIClicked -= HandleSummonButtonClickFromUI;
         // -----------------------
