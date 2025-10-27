@@ -17,7 +17,7 @@ namespace Unity.Assets.Scripts.Objects
         private bool isCollected = false;
         
         // 게임 매니저 참조
-        private BrickGameManager gameManager;
+        // private BrickGameManager gameManager;
         
         private void Start()
         {
@@ -27,16 +27,16 @@ namespace Unity.Assets.Scripts.Objects
                 gameObject.tag = "Star";
             }
             
-            gameManager = FindObjectOfType<BrickGameManager>();
-            if (gameManager == null)
-            {
-                Debug.LogWarning("BrickGameManager를 찾을 수 없습니다. 점수가 추가되지 않을 수 있습니다.");
-            }
+            // gameManager = FindObjectOfType<BrickGameManager>();
+            // if (gameManager == null)
+            // {
+            //     Debug.LogWarning("BrickGameManager를 찾을 수 없습니다. 점수가 추가되지 않을 수 있습니다.");
+            // }
             
-            if (starRenderer == null)
-            {
-                starRenderer = GetComponent<Renderer>();
-            }
+            // if (starRenderer == null)
+            // {
+            //     starRenderer = GetComponent<Renderer>();
+            // }
         }
         
         // PhysicsObject에서 상속받은 Update 또는 FixedUpdate 사용
