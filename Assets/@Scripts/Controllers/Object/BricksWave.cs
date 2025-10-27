@@ -22,8 +22,7 @@ using TMPro;
                 waveText = textTransform.GetComponent<TextMeshPro>();
 
                 // Determine the number of hits required to break the brick based on level
-                int currentLevel = Managers.Game?.BrickGame?.GetCurrentLevel() ?? 1;
-                wave = currentLevel < 10 ? Random.Range(1, 3) : Random.Range(currentLevel / 5, currentLevel / 2);
+                wave = CommonVars.level < 10 ? Random.Range(1, 3) : Random.Range(CommonVars.level / 5, CommonVars.level / 2);
                 waveText.text = wave.ToString();
             }
 

@@ -58,28 +58,22 @@ namespace Unity.Assets.Scripts.Objects
 
 
         [Header("Power Up Effects")]
+        private static int currentPower = 1; // 모든 공이 공유하는 공격력
+        private static float powerTimer = 0f; // 모든 공이 공유하는 타이머
         [SerializeField] private Material normalMaterial; // 기본 재질
         [SerializeField] private Material poweredMaterial; // 파워업 상태 재질
         private Renderer ballRenderer;
 
-        // 공격력 접근자 (BallManager에서 조회)
-        public int AttackPower => Managers.Game?.BrickGame?.Ball?.CurrentPower ?? 1;
+        // 정적 변수 접근자
+        public static int SharedPower => currentPower;
+        public static float SharedPowerTimer => powerTimer;
+
+        // 공격력 접근자
+        public int AttackPower => currentPower;
 
         // 네트워크 변수
         private NetworkVariable<int> _syncedBallCount = new NetworkVariable<int>(1);
         private NetworkVariable<EBallState> _syncedState = new NetworkVariable<EBallState>(EBallState.None); // 상태 동기화 (여기서 정의)
-
-        // 위치/속도 동기화 (NetworkTransform 대신 수동 동기화)
-        private NetworkVariable<Vector3> _syncedPosition = new NetworkVariable<Vector3>(
-            Vector3.zero,
-            NetworkVariableReadPermission.Everyone,
-            NetworkVariableWritePermission.Server
-        );
-        private NetworkVariable<Vector2> _syncedVelocity = new NetworkVariable<Vector2>(
-            Vector2.zero,
-            NetworkVariableReadPermission.Everyone,
-            NetworkVariableWritePermission.Server
-        );
         
         // 시스템 변수
         private Camera mainCamera;
@@ -132,27 +126,13 @@ namespace Unity.Assets.Scripts.Objects
         
         protected virtual void Start() // virtual로 선언하여 혹시 모를 자식 클래스 오버라이드 허용
         {
-            // 패들 Collider 캐싱
-            if (plank != null)
-            {
-                _plankCollider = plank.GetComponent<Collider2D>();
-                if (_plankCollider == null)
-                {
-                    GameLogger.Warning("PhysicsBall", $"{gameObject.name}: 패들에 Collider2D가 없습니다!");
-                }
-            }
-            else
-            {
-                GameLogger.Warning("PhysicsBall", $"{gameObject.name}: 패들이 할당되지 않았습니다! Inspector에서 PhysicsPlank를 할당하세요.");
-            }
-            
             // 서버에서만 초기 상태 설정 및 위치 조정
             if (IsServer || !IsSpawned)
             {
                  ResetBallToReadyState(); // 초기 상태 및 위치 설정
+
             }
-            
-            // 렌더러 컴포넌트 참조 초기화
+                // 렌더러 컴포넌트 참조 초기화
             if (ballRenderer == null)
             {
                 ballRenderer = GetComponent<Renderer>() ?? ballModel?.GetComponent<Renderer>();
@@ -166,19 +146,15 @@ namespace Unity.Assets.Scripts.Objects
             {
                 UpdateStateMachine();
             }
-            else if (IsClient && IsSpawned)
-            {
-                // 클라이언트: 서버 위치로 부드럽게 보간
-                InterpolateToServerPosition();
-            }
+                UpdatePowerStatus();
 
-            UpdatePowerStatus();
+
         }
         
         protected override void FixedUpdate()
         {
             base.FixedUpdate(); // 부모 FixedUpdate 호출 (이전 상태 기록 등)
-
+            
             // 서버에서만 물리 관련 업데이트 수행
              if (IsServer || !IsSpawned) // 로컬 테스트용으로 !IsSpawned 추가
              {
@@ -187,12 +163,6 @@ namespace Unity.Assets.Scripts.Objects
                  {
                      UpdateMovingPhysics();
                  }
-
-                 // 서버: NetworkVariable에 위치/속도 동기화 (스폰된 경우에만)
-                 if (IsSpawned)
-                 {
-                     SyncPositionToClients();
-                 }
              }
         }
         
@@ -200,28 +170,6 @@ namespace Unity.Assets.Scripts.Objects
         #endregion
         
         #region Network Lifecycle Methods
-        protected override void OnEnable()
-        {
-            base.OnEnable();
-            
-            // BallManager에 등록 (NetworkSpawn 이후에도 유효)
-            var ballManager = Managers.Game?.BrickGame?.Ball;
-            if (ballManager != null)
-            {
-                ballManager.RegisterBall(this);
-            }
-        }
-        
-        protected override void OnDisable()
-        {
-            // BallManager에서 해제
-            var ballManager = Managers.Game?.BrickGame?.Ball;
-            if (ballManager != null)
-            {
-                ballManager.UnregisterBall(this);
-            }
-        }
-        
         public override void OnNetworkSpawn()
         {
             base.OnNetworkSpawn();
@@ -230,67 +178,38 @@ namespace Unity.Assets.Scripts.Objects
             {
                 _syncedBallCount.Value = ballCount;
                 _syncedState.Value = CurrentState; // 초기 상태 동기화
-                _syncedPosition.Value = transform.position;
-                if (rb != null)
-                {
-                    _syncedVelocity.Value = rb.linearVelocity;
-                }
             }
 
             if (IsClient)
             {
                 _syncedBallCount.OnValueChanged += OnBallCountChanged;
                 _syncedState.OnValueChanged += OnStateChanged; // 상태 변경 콜백 등록
-                _syncedPosition.OnValueChanged += OnPositionChanged;
-                _syncedVelocity.OnValueChanged += OnVelocityChanged;
 
                  // 클라이언트는 서버로부터 받은 상태를 즉시 적용
                 CurrentState = _syncedState.Value;
-                transform.position = _syncedPosition.Value;
-                if (rb != null && !IsServer)
-                {
-                    rb.linearVelocity = _syncedVelocity.Value;
-                }
             }
         }
         
         public override void OnNetworkDespawn()
         {
             base.OnNetworkDespawn();
-
+            
             if (IsClient)
             {
                 _syncedBallCount.OnValueChanged -= OnBallCountChanged;
                 _syncedState.OnValueChanged -= OnStateChanged; // 상태 변경 콜백 해제
-                _syncedPosition.OnValueChanged -= OnPositionChanged;
-                _syncedVelocity.OnValueChanged -= OnVelocityChanged;
             }
         }
         
         // 네트워크 콜백 메서드들
         private void OnBallCountChanged(int previousValue, int newValue){ ballCount = newValue;}
-
+        
         private void OnStateChanged(EBallState previousValue, EBallState newValue)
         {
             // 클라이언트는 서버로부터 받은 상태를 적용
             if (!IsServer)
             {
                  CurrentState = newValue;
-            }
-        }
-
-        private void OnPositionChanged(Vector3 previousValue, Vector3 newValue)
-        {
-            // 클라이언트에서는 보간을 위해 직접 적용하지 않음
-            // Update()에서 Lerp로 부드럽게 이동
-        }
-
-        private void OnVelocityChanged(Vector2 previousValue, Vector2 newValue)
-        {
-            // 클라이언트에서 속도 정보 업데이트 (참고용)
-            if (!IsServer && rb != null)
-            {
-                // 클라이언트는 물리 시뮬레이션 하지 않으므로 속도는 참고만
             }
         }
         #endregion
@@ -365,66 +284,30 @@ namespace Unity.Assets.Scripts.Objects
             }
         }
 
-        /// <summary>
-        /// 이 공이 마지막 남은 공인지 확인하는 메서드 (BallManager 기반)
-        /// FindObjectsOfType 대체
-        /// </summary>
+        // 이 공이 마지막 남은 공인지 확인하는 메서드
         private bool IsLastBall()
         {
-            var ballManager = Managers.Game?.BrickGame?.Ball;
-            if (ballManager == null)
-            {
-                // BallManager 없으면 true 반환 (안전 조치)
-                return true;
-            }
+            // 1. 현재 씬의 모든 PhysicsBall 찾기
+            PhysicsBall[] allBalls = FindObjectsOfType<PhysicsBall>();
             
-            // BallManager의 IsLastMovingBall() 사용
-            bool isLast = ballManager.IsLastMovingBall(this);
-            
-            #if UNITY_EDITOR || DEVELOPMENT_BUILD
-            Debug.Log($"[{gameObject.name}] Is last moving ball: {isLast}");
-            #endif
-            
-            return isLast;
-        }
-        
-        // 서버에서 클라이언트로 위치/속도 동기화
-        private void SyncPositionToClients()
-        {
-            if (!IsServer) return;
-
-            // 위치가 크게 변했을 때만 업데이트 (최적화)
-            float positionDiff = Vector3.Distance(transform.position, _syncedPosition.Value);
-            if (positionDiff > 0.01f)
+            // 2. Moving 또는 Launching 상태인 공의 개수 확인
+            int movingBalls = 0;
+            foreach (PhysicsBall ball in allBalls)
             {
-                _syncedPosition.Value = transform.position;
-            }
-
-            // 속도 업데이트
-            if (rb != null && !rb.isKinematic)
-            {
-                Vector2 velocityDiff = rb.linearVelocity - _syncedVelocity.Value;
-                if (velocityDiff.sqrMagnitude > 0.01f)
+                if (ball.CurrentState == EBallState.Moving || ball.CurrentState == EBallState.Launching)
                 {
-                    _syncedVelocity.Value = rb.linearVelocity;
+                    movingBalls++;
                 }
             }
+            
+            #if UNITY_EDITOR || DEVELOPMENT_BUILD
+            Debug.Log($"[{gameObject.name}] Moving balls count: {movingBalls}");
+            #endif
+            
+            // 3. 이 공을 포함해서 Moving 또는 Launching 상태인 공이 1개(자기 자신)뿐이라면 마지막 공
+            return movingBalls <= 1;
         }
-
-        // 클라이언트에서 서버 위치로 보간
-        private void InterpolateToServerPosition()
-        {
-            if (IsServer || !IsSpawned) return;
-
-            // 위치 보간 (부드럽게 이동)
-            float interpolationSpeed = 10f;
-            transform.position = Vector3.Lerp(
-                transform.position,
-                _syncedPosition.Value,
-                Time.deltaTime * interpolationSpeed
-            );
-        }
-
+        
         // 기즈모 렌더링
         protected override void OnDrawGizmos()
         {
@@ -492,30 +375,27 @@ namespace Unity.Assets.Scripts.Objects
 
         private void UpdateReadyState()
         {
-            // Ready 상태: 패들 위에서 대기, 패들 이동 시 공도 따라감
-            if (plank != null)
-            {
-                float currentPlankX = plank.transform.position.x;
-                
-                // 패들 위에 공 위치 유지 (약간의 오차 허용)
-                Vector3 targetPosition = CalculateBallPositionAbovePlank();
-                if (Vector3.Distance(transform.position, targetPosition) > 0.01f)
-                {
-                    transform.position = targetPosition;
-                }
-                
-                // 입력 감지: 마우스 클릭 또는 스페이스바로 발사
-                bool launchInput = Input.GetMouseButtonDown(0) || Input.GetKeyDown(KeyCode.Space);
-                
-                if (launchInput)
-                {
-                    LaunchBall(launchDirection); // 설정된 기본 방향으로 발사
-                    CurrentState = EBallState.Launching;
-                }
-                
-                // 이전 패들 위치 업데이트
-                previousPlankX = currentPlankX;
-            }
+             // // 게임 진행 가능할 때만 발사 로직 처리
+             // if (CommonVars.canContinue && plank != null)
+             // {
+             //     float currentPlankX = plank.transform.position.x;
+             //
+             //     // 플랭크 위에 공 위치 유지 (약간의 오차 허용)
+             //     if (Mathf.Abs(currentPlankX - transform.position.x) > 0.01f || Mathf.Abs(transform.position.y - GetPlankRelativeSpawnY()) > 0.01f)
+             //     {
+             //         SetBallPositionAbovePlank();
+             //     }
+             //
+             //     // 플랭크 이동 감지 (첫 프레임 스킵 로직 제거 - 상태 진입 시 위치 고정으로 대체)
+             //     if (Mathf.Abs(currentPlankX - previousPlankX) >= plankMoveThreshold)
+             //     {
+             //         LaunchBall(launchDirection); // 설정된 기본 방향으로 발사
+             //     }
+             //     else
+             //     {
+             //          previousPlankX = currentPlankX; // 이전 위치 업데이트
+             //     }
+             // }
         }
 
         private void UpdateLaunchingState()
@@ -730,9 +610,9 @@ namespace Unity.Assets.Scripts.Objects
     {
         if (plank != null)
         {
-            // 패들 위에 공 배치 (자동 계산)
-            Vector3 newPosition = CalculateBallPositionAbovePlank();
-            transform.position = newPosition;
+            // BallPositionUtility 사용하여 위치 계산
+            // Vector3 newPosition = BallPositionUtility.GetLaunchPosition(plank, objectCollider, transform);
+            // transform.position = newPosition;
             
             // 속도 초기화
             if (rb != null)
@@ -740,41 +620,11 @@ namespace Unity.Assets.Scripts.Objects
                 rb.linearVelocity = Vector2.zero;
                 rb.angularVelocity = 0f;
             }
-            
-            GameLogger.DevLog("PhysicsBall", $"{gameObject.name} 패들 위로 이동: {newPosition}");
         }
         else
         {
             Debug.LogWarning($"[{gameObject.name} SetBallPositionAbovePlank] Plank reference is null");
         }
-    }
-    
-    /// <summary>
-    /// 패들 위에 공을 배치할 위치 계산
-    /// </summary>
-    private Vector3 CalculateBallPositionAbovePlank()
-    {
-        if (plank == null) return transform.position;
-        
-        // 패들의 Collider 높이 계산
-        float plankHalfHeight = 0.5f; // 기본값
-        if (_plankCollider != null)
-        {
-            plankHalfHeight = _plankCollider.bounds.extents.y;
-        }
-        
-        // 공의 Collider 높이 계산
-        float ballHalfHeight = 0.5f; // 기본값
-        if (objectCollider != null)
-        {
-            ballHalfHeight = objectCollider.bounds.extents.y;
-        }
-        
-        // 패들 위에 공 배치: 패들 중심 + 패들 반높이 + 공 반높이 + 약간의 오프셋
-        float ballY = plank.transform.position.y + plankHalfHeight + ballHalfHeight + SPAWN_OFFSET_Y;
-        float ballX = plank.transform.position.x;
-        
-        return new Vector3(ballX, ballY, transform.position.z);
     }
         
         // 플랭크 기준 스폰 Y 좌표 계산
@@ -788,21 +638,12 @@ namespace Unity.Assets.Scripts.Objects
         return  plank.transform.position.y;
     }
 
-    /// <summary>
-    /// 공격력 증가 (Star 아이템 획득 시)
-    /// 정적 메서드 → BallManager 호출로 변경
-    /// </summary>
     public static void SharedPowerUp(int amount, float duration)
     {
-        var ballManager = Managers.Game?.BrickGame?.Ball;
-        if (ballManager != null)
-        {
-            ballManager.IncreasePower(amount, duration);
-        }
-        else
-        {
-            Debug.LogWarning("[PhysicsBall] BallManager가 초기화되지 않음 - 공격력 증가 실패");
-        }
+        currentPower += amount;
+        powerTimer = Mathf.Max(powerTimer, duration);
+        
+        Debug.Log($"<color=green>[PhysicsBall] 모든 공 공격력 증가: {currentPower}, 남은 시간: {powerTimer}초</color>");
     }
 
     public void PowerUp(int amount, float duration)
@@ -813,49 +654,56 @@ namespace Unity.Assets.Scripts.Objects
 
 
 
-    /// <summary>
-    /// 공 상태 업데이트 (색상만 업데이트, 타이머는 BallManager에서 관리)
-    /// </summary>
+ // PhysicsBall의 UpdatePowerStatus 메서드 수정
     private void UpdatePowerStatus()
     {
         // 색상 업데이트는 모든 공에서 실행
         ColorBallByPower();
         
-        // 타이머 업데이트는 BallManager에서 처리 (BrickGameManager.OnUpdate → BallManager.UpdatePowerTimer)
+  
+        if (gameObject.name.Contains("ball") || FindObjectsOfType<PhysicsBall>().Length == 1)
+        {
+            if (powerTimer > 0)
+            {
+                powerTimer -= Time.deltaTime;
+                
+                if (powerTimer <= 0)
+                {
+                    powerTimer = 0;
+                    currentPower = 1; // 기본값으로 리셋
+                    
+                    Debug.Log("<color=yellow>[PhysicsBall] 모든 공 공격력 효과 종료</color>");
+                }
+            }
+        }
     }
-    /// <summary>
-    /// 공격력에 따라 공 색상 변경 (BallManager.CurrentPower 참조)
-    /// </summary>
     public void ColorBallByPower()
     {
         if (ballRenderer == null) return;
         
-        // BallManager에서 현재 공격력 조회
-        int power = Managers.Game?.BrickGame?.Ball?.CurrentPower ?? 1;
-        
-        // 목표 색상 계산
+        // 목표 색상 계산 - 정적 공격력 사용
         Color targetColor;
-        if (power <= 1)
+        if (currentPower <= 1)
         {
             // 기본 상태 - 흰색
             targetColor = Color.white;
         }
-        else if (power <= 3)
+        else if (currentPower <= 3)
         {
             // 공격력 2~3 - 노란색에서 빨간색으로 전환
-            float intensity = (power - 1) / 2f; // 0~1 사이 값
+            float intensity = (currentPower - 1) / 2f; // 0~1 사이 값
             targetColor = new Color(1, 1 - intensity, 0);
         }
-        else if (power <= 5)
+        else if (currentPower <= 5)
         {
             // 공격력 4~5 - 빨간색에서 보라색으로 전환
-            float intensity = (power - 3) / 2f; // 0~1 사이 값
+            float intensity = (currentPower - 3) / 2f; // 0~1 사이 값
             targetColor = new Color(1, 0, intensity);
         }
         else
         {
             // 공격력 6 이상 - 보라색에서 파란색으로 전환
-            float redValue = 1 - Mathf.Min((power - 5) / 3f, 1f);
+            float redValue = 1 - Mathf.Min((currentPower - 5) / 3f, 1f);
             targetColor = new Color(Mathf.Max(redValue, 0), 0, 1);
         }
         

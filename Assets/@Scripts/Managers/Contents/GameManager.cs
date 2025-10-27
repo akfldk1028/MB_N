@@ -19,66 +19,22 @@ using System.IO;
 using System.Linq;
 using UnityEngine;
 using Random = UnityEngine.Random;
-using MB.Infrastructure.Messages;
 
 
 public class GameManager
 {
-	#region BrickGame
-	private BrickGameManager _brickGame;
-	
-	/// <summary>
-	/// 벽돌깨기 게임 매니저 접근자
-	/// Managers.Game.BrickGame 형태로 사용
-	/// </summary>
-	public BrickGameManager BrickGame => _brickGame;
-	#endregion
-	
 	public GameManager()
 	{
-		GameLogger.Progress("GameManager", "GameManager 생성됨");
-		
-		// BrickGameManager 인스턴스 생성
-		_brickGame = new BrickGameManager();
+		Debug.Log("<color=yellow>[GameManager]</color> 생성됨");
 	}
-	
-	/// <summary>
-	/// BrickGame 초기화 (의존성 주입)
-	/// 씬에서 필요한 컴포넌트들을 찾아서 주입
-	/// </summary>
-	public void InitializeBrickGame(
-		IBrickPlacer brickPlacer,
-		IScoreDisplay scoreDisplay,
-		PhysicsPlank plank,
-		Camera mainCamera,
-		BrickGameSettings settings = null)
-	{
-		if (_brickGame == null)
-		{
-			GameLogger.Error("GameManager", "BrickGame이 null입니다.");
-			return;
-		}
-		
-		// 설정이 없으면 기본값 사용
-		if (settings == null)
-		{
-			settings = BrickGameSettings.CreateDefault();
-		}
-		
-		// TimeProvider는 Unity 기본 제공
-		var timeProvider = new UnityTimeProvider();
-		
-		// BrickGame 초기화
-		_brickGame.Initialize(brickPlacer, scoreDisplay, timeProvider, plank, mainCamera, settings);
-		
-		// ActionBus에 Update 구독
-		Managers.Subscribe(ActionId.System_Update, _brickGame.OnUpdate);
-		
-		GameLogger.Success("GameManager", "BrickGame 초기화 완료!");
-	}
+
+
+
+
 
 	#region Save & Load	
 	public string Path { get { return Application.persistentDataPath + "/SaveData.json"; } }
+
 
 	#endregion
 

@@ -1,18 +1,11 @@
 using System.Collections;
 using System.Collections.Generic;
 using Unity.Assets.Scripts.Objects;
-using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.UI;
 
 public class PhysicsPlank : PhysicsObject
 {
-    // ✅ 네트워크 위치 동기화 (Inspector 없이 코드로만 처리)
-    private NetworkVariable<Vector3> _syncedPosition = new NetworkVariable<Vector3>(
-        Vector3.zero,
-        NetworkVariableReadPermission.Everyone,
-        NetworkVariableWritePermission.Owner // Owner가 위치 업데이트
-    );
     // public bool movable; // 이 변수는 MainBall.cs에서 공의 상태에 따라 제어할 수 있습니다. (선택적)
                            // 여기서는 항상 움직일 수 있다고 가정하고 진행합니다.
                            // 만약 공이 발사되기 전에는 움직이지 않게 하려면 MainBall.cs에서 이 값을 조절해야 합니다.
@@ -51,82 +44,74 @@ public class PhysicsPlank : PhysicsObject
         plankPlane = new Plane(Vector3.forward, transform.position);
     }
 
-    // ✅ 네트워크 생명주기
-    public override void OnNetworkSpawn()
+    void Update()
     {
-        base.OnNetworkSpawn();
+        if (leftEnd == null || rightEnd == null || mainCamera == null) return; // 이동 한계점이 없으면 실행 중단
 
-        if (IsOwner)
+        Vector3 inputPosition = Vector3.zero;
+        bool inputDetected = false;
+
+        if (Input.GetMouseButton(0)) // 마우스 왼쪽 버튼 또는 터치
         {
-            // Owner: 초기 위치 동기화
-            _syncedPosition.Value = transform.position;
+            inputPosition = Input.mousePosition;
+            inputDetected = true;
         }
-        else
+        // // 터치 입력을 별도로 처리하려면 (멀티터치 등)
+        // else if (Input.touchCount > 0)
+        // {
+        //     inputPosition = Input.GetTouch(0).position;
+        //     inputDetected = true;
+        // }
+
+        if (inputDetected)
         {
-            // 다른 플레이어: 서버 위치로 즉시 이동
-            transform.position = _syncedPosition.Value;
-            _syncedPosition.OnValueChanged += OnPositionChanged;
+            // 1. 마우스 위치로 Ray 생성
+            Ray ray = mainCamera.ScreenPointToRay(inputPosition);
+
+            // 2. Ray와 플랭크 평면의 교차점 계산
+            float enterDistance;
+            if (plankPlane.Raycast(ray, out enterDistance))
+            {
+                // 교차점 월드 좌표 얻기
+                Vector3 worldPosition = ray.GetPoint(enterDistance);
+
+                float targetXBeforeClamp = worldPosition.x;
+
+                // 3. 목표 X 좌표 계산 및 제한
+                float leftBoundaryX = leftEnd.position.x;
+                float rightBoundaryX = rightEnd.position.x;
+                float targetXAfterClamp = Mathf.Clamp(targetXBeforeClamp, leftBoundaryX, rightBoundaryX);
+
+                // 4. 현재 위치에서 목표 위치까지 부드럽게 이동할 새 위치 계산
+
+                Vector3 targetPosition = new Vector3(targetXAfterClamp, transform.position.y, transform.position.z);
+
+                // MoveTowards를 사용하여 일정한 속도로 이동하도록 변경
+                smoothSpeed = 20f;
+                Vector3 smoothedPosition = Vector3.MoveTowards(transform.position, targetPosition, smoothSpeed * Time.deltaTime);
+
+                if (rb != null && rb.isKinematic)
+                {
+                     rb.MovePosition(smoothedPosition);
+                }
+                else
+                {
+                    // Rigidbody가 없거나 Kinematic이 아니면 기존 방식 사용 (경고 로깅 추가 가능)
+                    transform.position = smoothedPosition;
+                    if(rb == null) Debug.LogWarning("[PhysicsPlank] Rigidbody2D not found for MovePosition.", this);
+                    else if(!rb.isKinematic) Debug.LogWarning("[PhysicsPlank] Rigidbody2D is not kinematic, using transform.position directly.", this);
+                }
+
+                 // --- 상세 추적 로그 (주석 처리)
+                //  Debug.Log($"MouseXY: {inputPosition.x:F0},{inputPosition.y:F0} | Viewport: {mainCamera.pixelRect} | WorldX: {worldPosition.x:F2} | TargetX_PreClamp: {targetXBeforeClamp:F2} | LeftB: {leftBoundaryX:F2} | RightB: {rightBoundaryX:F2} | TargetX_PostClamp: {targetXAfterClamp:F2} | CurrentX: {transform.position.x:F2}");
+            }
+            else
+            {
+                // Ray가 평면과 교차하지 않는 경우
+                // Debug.LogWarning("Ray가 플랭크 평면과 교차하지 않습니다.");
+            }
         }
     }
-
-    public override void OnNetworkDespawn()
-    {
-        base.OnNetworkDespawn();
-
-        if (!IsOwner)
-        {
-            _syncedPosition.OnValueChanged -= OnPositionChanged;
-        }
-    }
-
-    private void OnPositionChanged(Vector3 previousValue, Vector3 newValue)
-    {
-        // 다른 플레이어의 패들 위치 업데이트는 Update()에서 Lerp로 처리
-    }
-
-    private void Update()
-    {
-        if (!IsSpawned) return;
-
-        if (IsOwner)
-        {
-            // Owner: 위치 변경 시 NetworkVariable 업데이트
-            SyncPositionToServer();
-        }
-        else
-        {
-            // 다른 플레이어: 서버 위치로 부드럽게 보간
-            InterpolateToServerPosition();
-        }
-    }
-
-    private void SyncPositionToServer()
-    {
-        // 위치가 크게 변했을 때만 업데이트 (최적화)
-        float positionDiff = Vector3.Distance(transform.position, _syncedPosition.Value);
-        if (positionDiff > 0.01f)
-        {
-            _syncedPosition.Value = transform.position;
-        }
-    }
-
-    private void InterpolateToServerPosition()
-    {
-        // 부드럽게 보간
-        float interpolationSpeed = 15f;
-        transform.position = Vector3.Lerp(
-            transform.position,
-            _syncedPosition.Value,
-            Time.deltaTime * interpolationSpeed
-        );
-    }
-
-    // PlankManager가 입력 처리하므로 Update() 비활성화
-    // void Update()
-    // {
-    //     // PlankManager.UpdateMovement()가 모든 입력 처리를 담당합니다.
-    //     // 이 Update()는 사용하지 않습니다.
-    // }
 
     /// <summary>
     /// 플랭크와 공의 충돌 시 튕겨나갈 속도를 계산하여 반환합니다.

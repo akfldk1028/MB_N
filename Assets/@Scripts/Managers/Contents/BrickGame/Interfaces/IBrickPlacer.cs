@@ -11,3 +11,4 @@ public interface IBrickPlacer
     void PlaceMultipleRows(int rowCount);
 }
 
+

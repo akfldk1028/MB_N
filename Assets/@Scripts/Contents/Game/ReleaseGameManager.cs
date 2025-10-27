@@ -15,6 +15,7 @@ public class ReleaseGameManager : MonoBehaviour
     // -------------------------------
 
     private bool isGameActive = false;
+    private BrickGameManager _brickGameManager; // BrickGameManager 참조
     private int _latestScore = 0; // 최신 점수 저장
     
     // --- Cannon 참조 변경 ---
@@ -39,16 +40,17 @@ public class ReleaseGameManager : MonoBehaviour
         isGameActive = true;
         OnGameStart?.Invoke();
 
-        // --- BrickGameManager 접근 (Managers 패턴) ---
-        if (Managers.Game?.BrickGame != null)
+        // --- BrickGameManager 찾기 ---
+        _brickGameManager = FindObjectOfType<BrickGameManager>();
+        if (_brickGameManager != null)
         {
-            _latestScore = Managers.Game.BrickGame.GetCurrentScore();
-            Managers.Game.BrickGame.OnScoreChanged += HandleScoreChange;
+            _latestScore = _brickGameManager.GetCurrentScore();
+            _brickGameManager.OnScoreChanged += HandleScoreChange;
             Debug.Log($"<color=green>[ReleaseGameManager] Initial Score: {_latestScore}</color> ");
         }
         else
         {
-             Debug.LogError($"<color=red>[ReleaseGameManager] Managers.Game.BrickGame을 찾을 수 없습니다!</color> ");
+             Debug.LogError($"<color=red>[ReleaseGameManager] BrickGameManager를 찾을 수 없습니다!</color> ");
         }
         
         // --- IsometricGridGenerator에서 캐논 배열 가져오기 ---
@@ -73,9 +75,9 @@ public class ReleaseGameManager : MonoBehaviour
     private void OnDestroy()
     {
         // --- 이벤트 구독 해지 ---
-        if (Managers.Game?.BrickGame != null)
+        if (_brickGameManager != null)
         {
-            Managers.Game.BrickGame.OnScoreChanged -= HandleScoreChange;
+            _brickGameManager.OnScoreChanged -= HandleScoreChange;
             Debug.Log("[ReleaseGameManager] Unsubscribed from OnScoreChanged event.");
         }
         
