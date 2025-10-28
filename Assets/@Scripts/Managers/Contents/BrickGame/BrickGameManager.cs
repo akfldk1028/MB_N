@@ -121,10 +121,10 @@ public class BrickGameManager
     {
         if (_brickPlacer == null)
         {
-            GameLogger.Error("BrickGameManager", "BrickPlacer가 null입니다. Initialize()를 먼저 호출하세요.");
-            return;
+            GameLogger.Warning("BrickGameManager", "BrickPlacer가 null입니다. 벽돌 자동 생성 생략 (멀티플레이어 모드는 OK)");
+            // return 제거 - 게임은 계속 진행
         }
-        
+
         _state.CurrentPhase = GamePhase.Playing;
         _state.CurrentSpawnInterval = _settings.spawnInterval;
         _state.NextSpawnTime = _timeProvider.CurrentTime + _settings.initialSpawnDelay;
