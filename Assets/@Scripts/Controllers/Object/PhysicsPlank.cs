@@ -27,10 +27,9 @@ public class PhysicsPlank : PhysicsObject
     public Camera mainCamera = null; // 카메라 (자동 설정됨)
     private Plane plankPlane; // Raycast를 위한 평면
 
-    // ✅ 멀티플레이어 자체 입력 처리를 위한 필드
-    private InputManager _inputManager;
+    // ✅ 컴포넌트 참조
     private Rigidbody2D _rb;
-    private float _keyboardMoveSpeed = 15f;
+    private float _keyboardMoveSpeed = 15f; // PlankManager와 동일한 속도
 
     void Start()
     {
@@ -60,6 +59,94 @@ public class PhysicsPlank : PhysicsObject
 
         GameLogger.Success("PhysicsPlank", $"{gameObject.name} 초기화 완료");
     }
+
+    /// <summary>
+    /// 네트워크 모드 여부 확인 (NetworkBehaviour 캐스팅 캡슐화)
+    /// </summary>
+    public bool IsNetworkMode()
+    {
+        return IsSpawned;
+    }
+
+    #region Public 이동 메서드 (PlankManager에서 호출)
+
+    /// <summary>
+    /// 키보드 입력으로 패들 이동 (PlankManager에서 호출)
+    /// </summary>
+    /// <param name="horizontal">좌우 입력값 (-1, 0, 1)</param>
+    /// <param name="deltaTime">프레임 시간</param>
+    public void MoveByKeyboard(float horizontal, float deltaTime)
+    {
+        if (Mathf.Abs(horizontal) < 0.01f) return;
+
+        Vector3 currentPosition = transform.position;
+        float targetX = currentPosition.x + (horizontal * _keyboardMoveSpeed * deltaTime);
+
+        // 경계 제한
+        if (leftEnd != null && rightEnd != null)
+        {
+            targetX = Mathf.Clamp(targetX, leftEnd.position.x, rightEnd.position.x);
+        }
+
+        Vector3 newPosition = new Vector3(targetX, currentPosition.y, currentPosition.z);
+
+        // Rigidbody2D로 이동
+        ApplyMovement(newPosition);
+    }
+
+    /// <summary>
+    /// 마우스/터치 위치로 패들 이동 (PlankManager에서 호출)
+    /// </summary>
+    /// <param name="pointerPosition">스크린 좌표</param>
+    /// <param name="camera">카메라 참조</param>
+    public void MoveByPointer(Vector3 pointerPosition, Camera camera)
+    {
+        if (camera == null || plankPlane.normal == Vector3.zero) return;
+
+        // 1. 마우스 위치로 Ray 생성
+        Ray ray = camera.ScreenPointToRay(pointerPosition);
+
+        // 2. Ray와 플랭크 평면의 교차점 계산
+        float enterDistance;
+        if (plankPlane.Raycast(ray, out enterDistance))
+        {
+            // 교차점 월드 좌표 얻기
+            Vector3 worldPosition = ray.GetPoint(enterDistance);
+            float targetX = worldPosition.x;
+
+            // 3. 경계 제한
+            if (leftEnd != null && rightEnd != null)
+            {
+                targetX = Mathf.Clamp(targetX, leftEnd.position.x, rightEnd.position.x);
+            }
+
+            // 4. 부드럽게 이동
+            Vector3 currentPosition = transform.position;
+            Vector3 targetPosition = new Vector3(targetX, currentPosition.y, currentPosition.z);
+
+            Vector3 smoothedPosition = Vector3.MoveTowards(currentPosition, targetPosition, smoothSpeed * Time.deltaTime);
+
+            // Rigidbody2D로 이동
+            ApplyMovement(smoothedPosition);
+        }
+    }
+
+    /// <summary>
+    /// 실제 위치 적용 (Rigidbody2D 또는 Transform)
+    /// </summary>
+    private void ApplyMovement(Vector3 newPosition)
+    {
+        if (_rb != null && _rb.isKinematic)
+        {
+            _rb.MovePosition(newPosition);
+        }
+        else
+        {
+            transform.position = newPosition;
+        }
+    }
+
+    #endregion
 
     /// <summary>
     /// Inspector 없이 모든 참조 자동 설정
@@ -97,19 +184,7 @@ public class PhysicsPlank : PhysicsObject
             }
         }
 
-        // 3. InputManager 자동 참조 (Managers 싱글톤)
-        if (_inputManager == null)
-        {
-            _inputManager = Managers.Game?.BrickGame?.Input;
-            if (_inputManager != null)
-            {
-                GameLogger.Info("PhysicsPlank", "InputManager 자동 참조 완료");
-            }
-            else
-            {
-                GameLogger.Warning("PhysicsPlank", "InputManager를 찾을 수 없습니다 (멀티플레이어 입력 불가)");
-            }
-        }
+        // ✅ InputManager는 PlankManager가 관리 (PhysicsPlank는 이동만 담당)
     }
 
     // ✅ 네트워크 생명주기
@@ -147,13 +222,13 @@ public class PhysicsPlank : PhysicsObject
 
     private void Update()
     {
-        // ✅ 멀티플레이어 모드: IsSpawned일 때만 네트워크 로직 실행
+        // ✅ 멀티플레이어 모드: 네트워크 동기화만 처리
+        // (입력 처리는 PlankManager.UpdateMovement()에서 통합 처리)
         if (IsSpawned)
         {
             if (IsOwner)
             {
-                // Owner: 입력 처리 + 위치 동기화
-                ProcessMultiplayerInput();
+                // Owner: PlankManager가 이동시킨 위치를 서버에 동기화
                 SyncPositionToServer();
             }
             else
@@ -162,8 +237,8 @@ public class PhysicsPlank : PhysicsObject
                 InterpolateToServerPosition();
             }
         }
-        // ✅ 싱글플레이어 모드: PlankManager가 UpdateMovement()로 입력 처리
-        // (IsSpawned == false일 때는 PlankManager.UpdateMovement()가 처리)
+        // ✅ 싱글플레이어 모드: PlankManager.UpdateMovement()가 입력 처리
+        // (IsSpawned == false일 때 - 네트워크 동기화 불필요)
     }
 
     private void SyncPositionToServer()
@@ -221,98 +296,9 @@ public class PhysicsPlank : PhysicsObject
             return bounceVelocity;
     }
 
-    #region ✅ 멀티플레이어 입력 처리 (PlankManager 로직 복사)
-    /// <summary>
-    /// 멀티플레이어 모드에서 Owner가 직접 입력 처리
-    /// PlankManager와 동일한 로직
-    /// </summary>
-    private void ProcessMultiplayerInput()
-    {
-        if (_inputManager == null) return;
-
-        // 현재 입력 타입에 따라 이동 처리
-        switch (_inputManager.CurrentInputType)
-        {
-            case InputManager.InputType.Keyboard:
-                ProcessKeyboardInput();
-                break;
-
-            case InputManager.InputType.Mouse:
-            case InputManager.InputType.Touch:
-                ProcessPointerInput();
-                break;
-        }
-    }
-
-    private void ProcessKeyboardInput()
-    {
-        float horizontal = _inputManager.HorizontalInput;
-
-        if (Mathf.Abs(horizontal) < 0.01f) return;
-
-        Vector3 currentPosition = transform.position;
-        float targetX = currentPosition.x + (horizontal * _keyboardMoveSpeed * Time.deltaTime);
-
-        // 경계 제한
-        if (leftEnd != null && rightEnd != null)
-        {
-            targetX = Mathf.Clamp(targetX, leftEnd.position.x, rightEnd.position.x);
-        }
-
-        Vector3 newPosition = new Vector3(targetX, currentPosition.y, currentPosition.z);
-
-        // Rigidbody2D로 이동
-        if (_rb != null && _rb.isKinematic)
-        {
-            _rb.MovePosition(newPosition);
-        }
-        else
-        {
-            transform.position = newPosition;
-        }
-    }
-
-    private void ProcessPointerInput()
-    {
-        if (!_inputManager.IsPointerActive) return;
-
-        Vector3 pointerPosition = _inputManager.PointerPosition;
-
-        // 1. 마우스 위치로 Ray 생성
-        Ray ray = mainCamera.ScreenPointToRay(pointerPosition);
-
-        // 2. Ray와 플랭크 평면의 교차점 계산
-        float enterDistance;
-        if (plankPlane.Raycast(ray, out enterDistance))
-        {
-            // 교차점 월드 좌표 얻기
-            Vector3 worldPosition = ray.GetPoint(enterDistance);
-            float targetX = worldPosition.x;
-
-            // 3. 경계 제한
-            if (leftEnd != null && rightEnd != null)
-            {
-                targetX = Mathf.Clamp(targetX, leftEnd.position.x, rightEnd.position.x);
-            }
-
-            // 4. 부드럽게 이동
-            Vector3 currentPosition = transform.position;
-            Vector3 targetPosition = new Vector3(targetX, currentPosition.y, currentPosition.z);
-
-            Vector3 smoothedPosition = Vector3.MoveTowards(currentPosition, targetPosition, smoothSpeed * Time.deltaTime);
-
-            // Rigidbody2D로 이동
-            if (_rb != null && _rb.isKinematic)
-            {
-                _rb.MovePosition(smoothedPosition);
-            }
-            else
-            {
-                transform.position = smoothedPosition;
-            }
-        }
-    }
-    #endregion
+    // ✅ 입력 처리 로직 제거됨
+    // - PlankManager.UpdateMovement()에서 통합 처리
+    // - 코드 중복 제거, 단일 책임 원칙 준수
 
     // 기존 PlankBallCollision 메서드는 CalculateBounceVelocity로 대체되었으므로 제거 또는 주석 처리
     // public void PlankBallCollision(Collision2D collision)

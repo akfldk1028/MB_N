@@ -93,7 +93,7 @@ public class PlankManager
     
     /// <summary>
     /// 매 프레임 패들 이동 처리
-    /// 싱글플레이어 전용 - 멀티플레이어일 때는 PhysicsPlank.Update()에서 자체 처리
+    /// ✅ 싱글/멀티플레이어 통합 - PlankManager가 모든 입력 처리 담당
     /// </summary>
     public void UpdateMovement(float deltaTime)
     {
@@ -115,16 +115,14 @@ public class PlankManager
             return;
         }
 
-        // ✅ 멀티플레이어 모드 체크: NetworkObject로 스폰되었으면 PhysicsPlank.Update()에서 처리
-        var baseObject = _plank as Unity.Assets.Scripts.Objects.BaseObject;
-        if (baseObject != null && baseObject.IsSpawned)
+        // ✅ 멀티플레이어 Owner가 아니면 입력 처리 안 함 (다른 플레이어의 패들)
+        if (_plank.IsNetworkMode() && !_plank.IsOwner)
         {
-            // NetworkObject로 스폰된 경우, PhysicsPlank.Update()에서 입력 처리하므로 여기서는 return
-            GameLogger.DevLog("PlankManager", $"멀티플레이어 모드 (IsSpawned=true, IsOwner={baseObject.IsOwner}) - PhysicsPlank.Update()에서 처리");
+            GameLogger.DevLog("PlankManager", "다른 플레이어의 패들 (IsOwner=false) - 입력 처리 건너뜀");
             return;
         }
 
-        // ✅ 싱글플레이어 모드: PlankManager가 입력 처리
+        // ✅ 싱글플레이어 또는 멀티플레이어 Owner: PlankManager가 입력 처리
         // 현재 입력 타입에 따라 이동 처리
         switch (_inputManager.CurrentInputType)
         {
@@ -140,82 +138,39 @@ public class PlankManager
     }
     
     #region 이동 처리
+    /// <summary>
+    /// 키보드 입력 처리 - PhysicsPlank.MoveByKeyboard() 위임
+    /// </summary>
     private void ProcessKeyboardMovement(float deltaTime)
     {
         float horizontal = _inputManager.HorizontalInput;
-        
+
         if (Mathf.Abs(horizontal) < 0.01f) return;
-        
-        Vector3 currentPosition = _plank.transform.position;
-        float targetX = currentPosition.x + (horizontal * _keyboardMoveSpeed * deltaTime);
-        
-        // 경계 제한
-        if (_plank.leftEnd != null && _plank.rightEnd != null)
-        {
-            targetX = Mathf.Clamp(targetX, _plank.leftEnd.position.x, _plank.rightEnd.position.x);
-        }
-        
-        Vector3 newPosition = new Vector3(targetX, currentPosition.y, currentPosition.z);
-        
-        // Rigidbody2D로 이동
-        Rigidbody2D rb = _plank.GetComponent<Rigidbody2D>();
-        if (rb != null && rb.isKinematic)
-        {
-            rb.MovePosition(newPosition);
-            GameLogger.DevLog("PlankManager", $"🎮 패들 이동 (Kinematic): {currentPosition.x:F2} → {newPosition.x:F2}");
-        }
-        else
-        {
-            _plank.transform.position = newPosition;
-            GameLogger.DevLog("PlankManager", $"🎮 패들 이동 (Transform): {currentPosition.x:F2} → {newPosition.x:F2}");
-        }
-        
-        OnPlankMoved?.Invoke(newPosition);
+
+        Vector3 beforePosition = _plank.transform.position;
+
+        // ✅ PhysicsPlank에 이동 위임 (코드 중복 제거)
+        _plank.MoveByKeyboard(horizontal, deltaTime);
+
+        Vector3 afterPosition = _plank.transform.position;
+
+        GameLogger.DevLog("PlankManager", $"🎮 패들 이동 (키보드): {beforePosition.x:F2} → {afterPosition.x:F2}");
+        OnPlankMoved?.Invoke(afterPosition);
     }
-    
+
+    /// <summary>
+    /// 마우스/터치 입력 처리 - PhysicsPlank.MoveByPointer() 위임
+    /// </summary>
     private void ProcessPointerMovement()
     {
         if (!_inputManager.IsPointerActive) return;
-        
+
         Vector3 pointerPosition = _inputManager.PointerPosition;
-        
-        // 1. 마우스 위치로 Ray 생성
-        Ray ray = _mainCamera.ScreenPointToRay(pointerPosition);
-        
-        // 2. Ray와 플랭크 평면의 교차점 계산
-        float enterDistance;
-        if (_plankPlane.Raycast(ray, out enterDistance))
-        {
-            // 교차점 월드 좌표 얻기
-            Vector3 worldPosition = ray.GetPoint(enterDistance);
-            float targetX = worldPosition.x;
-            
-            // 3. 경계 제한
-            if (_plank.leftEnd != null && _plank.rightEnd != null)
-            {
-                targetX = Mathf.Clamp(targetX, _plank.leftEnd.position.x, _plank.rightEnd.position.x);
-            }
-            
-            // 4. 부드럽게 이동
-            Vector3 currentPosition = _plank.transform.position;
-            Vector3 targetPosition = new Vector3(targetX, currentPosition.y, currentPosition.z);
-            
-            float smoothSpeed = _plank.smoothSpeed;
-            Vector3 smoothedPosition = Vector3.MoveTowards(currentPosition, targetPosition, smoothSpeed * Time.deltaTime);
-            
-            // Rigidbody2D로 이동
-            Rigidbody2D rb = _plank.GetComponent<Rigidbody2D>();
-            if (rb != null && rb.isKinematic)
-            {
-                rb.MovePosition(smoothedPosition);
-            }
-            else
-            {
-                _plank.transform.position = smoothedPosition;
-            }
-            
-            OnPlankMoved?.Invoke(smoothedPosition);
-        }
+
+        // ✅ PhysicsPlank에 이동 위임 (코드 중복 제거)
+        _plank.MoveByPointer(pointerPosition, _mainCamera);
+
+        OnPlankMoved?.Invoke(_plank.transform.position);
     }
     #endregion
     
