@@ -111,15 +111,21 @@ public class Managers : MonoBehaviour
 
     private async void Awake()
     {
+        // ✅ 디버깅: Awake 호출 확인
+        GameLogger.Info("Managers", $"Awake() 호출! GameObject: {gameObject.name}, activeInHierarchy: {gameObject.activeInHierarchy}");
+
         // 중복 체크
         if (s_instance != null && s_instance != this)
         {
+            GameLogger.Warning("Managers", "중복된 Managers 감지! 현재 GameObject 파괴");
             Destroy(gameObject);
             return;
         }
 
         s_instance = this;
         DontDestroyOnLoad(gameObject);
+
+        GameLogger.Success("Managers", $"DontDestroyOnLoad 설정 완료! GameObject: {gameObject.name}");
 
         // 메시지 시스템 초기화
         GameLogger.Progress("Managers", "Infrastructure 시스템 초기화 중...");
@@ -137,6 +143,9 @@ public class Managers : MonoBehaviour
 
         // 네트워크 컴포넌트 초기화
         await InitializeNetworkComponents();
+
+        // ✅ 디버깅: Awake 완료 후 상태 확인
+        GameLogger.Success("Managers", $"Awake 완료! GameObject active: {gameObject.activeInHierarchy}, enabled: {enabled}");
     }
 
     private async Task InitializeNetworkComponents()
@@ -319,6 +328,24 @@ public class Managers : MonoBehaviour
         GameLogger.Network("Managers", $"🌐 인터넷 상태: {connectionStatus}");
         
         return Task.CompletedTask;
+    }
+
+    private void Start()
+    {
+        // ✅ 디버깅: Start 호출 확인
+        GameLogger.Info("Managers", $"Start() 호출! GameObject: {gameObject.name}, active: {gameObject.activeInHierarchy}, enabled: {enabled}");
+    }
+
+    private void OnEnable()
+    {
+        // ✅ 디버깅: OnEnable 호출 확인
+        GameLogger.Info("Managers", $"OnEnable() 호출! GameObject: {gameObject.name}");
+    }
+
+    private void OnDisable()
+    {
+        // ✅ 디버깅: OnDisable 호출 확인 (Update가 멈추는 원인 확인)
+        GameLogger.Warning("Managers", $"OnDisable() 호출! GameObject: {gameObject.name} - Update가 중지됩니다!");
     }
 
     private void Update()
