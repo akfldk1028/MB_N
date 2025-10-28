@@ -11,7 +11,11 @@ public enum SpawnableObjectType
     Star
 }
 
-public class ObjectPlacement : MonoBehaviour
+/// <summary>
+/// 벽돌 배치를 담당하는 MonoBehaviour
+/// IBrickPlacer 인터페이스를 구현하여 BrickGameManager와 직접 연동
+/// </summary>
+public class ObjectPlacement : MonoBehaviour, IBrickPlacer
 {
     [Header("경계 참조")]
     [SerializeField] private Transform leftBorder;

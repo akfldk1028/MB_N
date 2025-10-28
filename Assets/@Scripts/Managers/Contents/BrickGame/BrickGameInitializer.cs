@@ -13,7 +13,7 @@ public class BrickGameInitializer
     #region Scene Objects Container
     private class SceneObjects
     {
-        public ObjectPlacementAdapter ObjectPlacementAdapter;
+        public ObjectPlacement ObjectPlacement; // ✅ Adapter 제거, 직접 사용
         public ScoreDisplayAdapter ScoreDisplayAdapter;
         public PhysicsPlank Plank;
         public Camera MainCamera;
@@ -57,20 +57,20 @@ public class BrickGameInitializer
     private SceneObjects CollectSceneObjects()
     {
         GameLogger.Progress("BrickGameInitializer", "씬 오브젝트 수집 중...");
-        
+
         var objects = new SceneObjects
         {
-            ObjectPlacementAdapter = Object.FindFirstObjectByType<ObjectPlacementAdapter>(),
+            ObjectPlacement = Object.FindFirstObjectByType<ObjectPlacement>(), // ✅ Adapter 제거, 직접 찾기
             ScoreDisplayAdapter = Object.FindFirstObjectByType<ScoreDisplayAdapter>(),
             Plank = Object.FindFirstObjectByType<PhysicsPlank>(),
             MainCamera = Camera.main,
             Balls = Object.FindObjectsByType<PhysicsBall>(FindObjectsSortMode.None),
             Bricks = Object.FindObjectsByType<Brick>(FindObjectsSortMode.None)
         };
-        
-        GameLogger.Info("BrickGameInitializer", 
+
+        GameLogger.Info("BrickGameInitializer",
             $"수집 완료: 공 {objects.Balls?.Length ?? 0}개, 벽돌 {objects.Bricks?.Length ?? 0}개");
-        
+
         return objects;
     }
     #endregion
@@ -84,11 +84,11 @@ public class BrickGameInitializer
         GameLogger.Progress("BrickGameInitializer", "필수 컴포넌트 검증 중...");
         
         bool isValid = true;
-        
-        // 선택: ObjectPlacementAdapter (1인 테스트에서는 불필요)
-        if (objects.ObjectPlacementAdapter == null)
+
+        // 선택: ObjectPlacement (1인 테스트에서는 불필요)
+        if (objects.ObjectPlacement == null)
         {
-            GameLogger.Warning("BrickGameInitializer", "ObjectPlacementAdapter를 찾을 수 없습니다. 벽돌 자동 생성 불가 (1인 테스트는 OK)");
+            GameLogger.Warning("BrickGameInitializer", "ObjectPlacement를 찾을 수 없습니다. 벽돌 자동 생성 불가 (멀티플레이어 모드는 OK)");
         }
         
         // 선택: ScoreDisplayAdapter (경고만)
@@ -133,16 +133,17 @@ public class BrickGameInitializer
     private void InjectDependencies(SceneObjects objects)
     {
         GameLogger.Progress("BrickGameInitializer", "의존성 주입 중...");
-        
+
         // GameManager를 통해 BrickGame 초기화
+        // ✅ ObjectPlacement가 IBrickPlacer를 구현하므로 그대로 전달
         Managers.Game.InitializeBrickGame(
-            objects.ObjectPlacementAdapter,
+            objects.ObjectPlacement,
             objects.ScoreDisplayAdapter,
             objects.Plank,
             objects.MainCamera,
             null  // 기본 설정 사용
         );
-        
+
         GameLogger.Success("BrickGameInitializer", "의존성 주입 완료");
     }
     #endregion
