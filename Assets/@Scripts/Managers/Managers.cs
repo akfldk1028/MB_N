@@ -97,27 +97,42 @@ public class Managers : MonoBehaviour
         {
             Initialized = true;
 
+            // ✅ 씬에 있는 @Managers 찾기
             GameObject go = GameObject.Find("@Managers");
             if (go == null)
             {
+                // 없으면 새로 생성
                 go = new GameObject { name = "@Managers" };
                 go.AddComponent<Managers>();
+                GameLogger.Info("Managers", "Init(): @Managers GameObject 새로 생성");
+            }
+            else
+            {
+                // 있으면 기존 것 사용
+                GameLogger.Info("Managers", "Init(): 씬에 있는 @Managers 사용");
             }
 
             DontDestroyOnLoad(go);
             s_instance = go.GetComponent<Managers>();
+
+            GameLogger.Success("Managers", $"Init() 완료! Instance: {s_instance != null}");
+        }
+        else
+        {
+            GameLogger.Info("Managers", $"Init() 스킵 (이미 초기화됨). s_instance: {s_instance != null}, Initialized: {Initialized}");
         }
     }
 
     private async void Awake()
     {
         // ✅ 디버깅: Awake 호출 확인
-        GameLogger.Info("Managers", $"Awake() 호출! GameObject: {gameObject.name}, activeInHierarchy: {gameObject.activeInHierarchy}");
+        GameLogger.Info("Managers", $"Awake() 호출! GameObject: {gameObject.name}, Scene: {gameObject.scene.name}, InstanceID: {gameObject.GetInstanceID()}");
 
-        // 중복 체크
+        // ✅ 중복 체크: DontDestroyOnLoad된 하나만 유지
         if (s_instance != null && s_instance != this)
         {
-            GameLogger.Warning("Managers", "중복된 Managers 감지! 현재 GameObject 파괴");
+            GameLogger.Warning("Managers", $"중복된 Managers 감지! 기존: Scene={s_instance.gameObject.scene.name} ID={s_instance.gameObject.GetInstanceID()}, 현재: Scene={gameObject.scene.name} ID={gameObject.GetInstanceID()}");
+            GameLogger.Warning("Managers", "현재 GameObject 파괴 (DontDestroyOnLoad된 것 유지)");
             Destroy(gameObject);
             return;
         }
@@ -125,7 +140,7 @@ public class Managers : MonoBehaviour
         s_instance = this;
         DontDestroyOnLoad(gameObject);
 
-        GameLogger.Success("Managers", $"DontDestroyOnLoad 설정 완료! GameObject: {gameObject.name}");
+        GameLogger.Success("Managers", $"DontDestroyOnLoad 설정 완료! GameObject: {gameObject.name}, InstanceID: {gameObject.GetInstanceID()}");
 
         // 메시지 시스템 초기화
         GameLogger.Progress("Managers", "Infrastructure 시스템 초기화 중...");
@@ -145,7 +160,7 @@ public class Managers : MonoBehaviour
         await InitializeNetworkComponents();
 
         // ✅ 디버깅: Awake 완료 후 상태 확인
-        GameLogger.Success("Managers", $"Awake 완료! GameObject active: {gameObject.activeInHierarchy}, enabled: {enabled}");
+        GameLogger.Success("Managers", $"Awake 완료! GameObject active: {gameObject.activeInHierarchy}, enabled: {enabled}, InstanceID: {gameObject.GetInstanceID()}");
     }
 
     private async Task InitializeNetworkComponents()
