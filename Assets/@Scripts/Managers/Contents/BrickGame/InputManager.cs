@@ -123,7 +123,8 @@ public class InputManager
             _currentInputType = InputType.Keyboard;
             _horizontalInput = horizontal;
             OnHorizontalInput?.Invoke(horizontal);
-            GameLogger.DevLog("InputManager", $"⌨️ 방향키 입력: {(horizontal > 0 ? "→" : "←")} ({horizontal:F1})");
+            // ✅ DevLog → Info로 변경 (디버깅용)
+            GameLogger.Info("InputManager", $"⌨️ 방향키 입력 감지: {(horizontal > 0 ? "→" : "←")} ({horizontal:F1})");
             return true; // 키보드 입력이 있음
         }
         else

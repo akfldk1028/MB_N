@@ -96,7 +96,22 @@ public class PlankManager
     /// </summary>
     public void UpdateMovement(float deltaTime)
     {
-        if (!_enabled || _plank == null || _inputManager == null) return;
+        // ✅ 디버깅: 조건 체크
+        if (!_enabled)
+        {
+            GameLogger.Warning("PlankManager", "UpdateMovement: _enabled = false");
+            return;
+        }
+        if (_plank == null)
+        {
+            GameLogger.Warning("PlankManager", "UpdateMovement: _plank = null");
+            return;
+        }
+        if (_inputManager == null)
+        {
+            GameLogger.Warning("PlankManager", "UpdateMovement: _inputManager = null");
+            return;
+        }
 
         // ✅ 멀티플레이: Owner만 입력 처리 (BaseObject는 NetworkBehaviour 상속)
         var baseObject = _plank as Unity.Assets.Scripts.Objects.BaseObject;
@@ -113,6 +128,7 @@ public class PlankManager
         switch (_inputManager.CurrentInputType)
         {
             case InputManager.InputType.Keyboard:
+                GameLogger.Info("PlankManager", $"키보드 입력 처리 중 (horizontal: {_inputManager.HorizontalInput})");
                 ProcessKeyboardMovement(deltaTime);
                 break;
 
@@ -127,33 +143,37 @@ public class PlankManager
     private void ProcessKeyboardMovement(float deltaTime)
     {
         float horizontal = _inputManager.HorizontalInput;
-        
-        if (Mathf.Abs(horizontal) < 0.01f) return;
-        
+
+        if (Mathf.Abs(horizontal) < 0.01f)
+        {
+            GameLogger.Warning("PlankManager", $"ProcessKeyboardMovement: horizontal 입력이 0입니다 ({horizontal})");
+            return;
+        }
+
         Vector3 currentPosition = _plank.transform.position;
         float targetX = currentPosition.x + (horizontal * _keyboardMoveSpeed * deltaTime);
-        
+
         // 경계 제한
         if (_plank.leftEnd != null && _plank.rightEnd != null)
         {
             targetX = Mathf.Clamp(targetX, _plank.leftEnd.position.x, _plank.rightEnd.position.x);
         }
-        
+
         Vector3 newPosition = new Vector3(targetX, currentPosition.y, currentPosition.z);
-        
+
         // Rigidbody2D로 이동
         Rigidbody2D rb = _plank.GetComponent<Rigidbody2D>();
         if (rb != null && rb.isKinematic)
         {
             rb.MovePosition(newPosition);
-            GameLogger.DevLog("PlankManager", $"🎮 패들 이동 (Kinematic): {currentPosition.x:F2} → {newPosition.x:F2}");
+            GameLogger.Info("PlankManager", $"🎮 패들 이동 (Kinematic): {currentPosition.x:F2} → {newPosition.x:F2}");
         }
         else
         {
             _plank.transform.position = newPosition;
-            GameLogger.DevLog("PlankManager", $"🎮 패들 이동 (Transform): {currentPosition.x:F2} → {newPosition.x:F2}");
+            GameLogger.Info("PlankManager", $"🎮 패들 이동 (Transform): {currentPosition.x:F2} → {newPosition.x:F2}");
         }
-        
+
         OnPlankMoved?.Invoke(newPosition);
     }
     
