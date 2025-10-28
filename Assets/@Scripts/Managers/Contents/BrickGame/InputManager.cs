@@ -86,22 +86,29 @@ public class InputManager
     public void UpdateInput()
     {
         if (!_enabled) return;
-        
-        // 1. 방향키 입력 (키보드)
-        ProcessKeyboardInput();
-        
-        // 2. 마우스 입력
-        ProcessMouseInput();
-        
-        // 3. 터치 입력 (모바일)
-        ProcessTouchInput();
+
+        // 1. 방향키 입력 (키보드) - 우선순위 최우선
+        bool hasKeyboardInput = ProcessKeyboardInput();
+
+        // 2. 키보드 입력이 없을 때만 마우스/터치 입력 처리
+        if (!hasKeyboardInput)
+        {
+            // 2-1. 마우스 입력
+            ProcessMouseInput();
+
+            // 2-2. 터치 입력 (모바일)
+            ProcessTouchInput();
+        }
     }
     
     #region 입력 처리
-    private void ProcessKeyboardInput()
+    /// <summary>
+    /// 키보드 입력 처리 - 방향키가 눌렸는지 반환
+    /// </summary>
+    private bool ProcessKeyboardInput()
     {
         float horizontal = 0f;
-        
+
         if (Input.GetKey(KeyCode.LeftArrow) || Input.GetKey(KeyCode.A))
         {
             horizontal = -1f;
@@ -110,17 +117,19 @@ public class InputManager
         {
             horizontal = 1f;
         }
-        
+
         if (horizontal != 0f)
         {
             _currentInputType = InputType.Keyboard;
             _horizontalInput = horizontal;
             OnHorizontalInput?.Invoke(horizontal);
             GameLogger.DevLog("InputManager", $"⌨️ 방향키 입력: {(horizontal > 0 ? "→" : "←")} ({horizontal:F1})");
+            return true; // 키보드 입력이 있음
         }
         else
         {
             _horizontalInput = 0f;
+            return false; // 키보드 입력이 없음
         }
     }
     
