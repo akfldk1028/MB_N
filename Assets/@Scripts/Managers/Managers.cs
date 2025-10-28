@@ -93,6 +93,8 @@ public class Managers : MonoBehaviour
 
     public static void Init()
     {
+        GameLogger.Info("Managers", $"Init() 호출됨! s_instance: {s_instance != null}, Initialized: {Initialized}");
+
         if (s_instance == null && Initialized == false)
         {
             Initialized = true;
@@ -109,17 +111,27 @@ public class Managers : MonoBehaviour
             else
             {
                 // 있으면 기존 것 사용
-                GameLogger.Info("Managers", "Init(): 씬에 있는 @Managers 사용");
+                GameLogger.Info("Managers", $"Init(): 씬에 있는 @Managers 사용 (Scene: {go.scene.name}, InstanceID: {go.GetInstanceID()})");
             }
 
             DontDestroyOnLoad(go);
             s_instance = go.GetComponent<Managers>();
 
-            GameLogger.Success("Managers", $"Init() 완료! Instance: {s_instance != null}");
+            GameLogger.Success("Managers", $"Init() 완료! Instance: {s_instance != null}, InstanceID: {go.GetInstanceID()}");
         }
         else
         {
             GameLogger.Info("Managers", $"Init() 스킵 (이미 초기화됨). s_instance: {s_instance != null}, Initialized: {Initialized}");
+
+            // ✅ s_instance가 있는데 파괴되었는지 확인!
+            if (s_instance != null)
+            {
+                GameLogger.Info("Managers", $"기존 s_instance: GameObject={s_instance.gameObject.name}, Scene={s_instance.gameObject.scene.name}, Active={s_instance.gameObject.activeInHierarchy}, Enabled={s_instance.enabled}");
+            }
+            else
+            {
+                GameLogger.Error("Managers", "s_instance가 null입니다! (파괴되었을 가능성)");
+            }
         }
     }
 
@@ -133,7 +145,9 @@ public class Managers : MonoBehaviour
         {
             GameLogger.Warning("Managers", $"중복된 Managers 감지! 기존: Scene={s_instance.gameObject.scene.name} ID={s_instance.gameObject.GetInstanceID()}, 현재: Scene={gameObject.scene.name} ID={gameObject.GetInstanceID()}");
             GameLogger.Warning("Managers", "현재 GameObject 파괴 (DontDestroyOnLoad된 것 유지)");
+            GameLogger.Warning("Managers", $"파괴 전 s_instance 상태: Active={s_instance.gameObject.activeInHierarchy}, Enabled={s_instance.enabled}");
             Destroy(gameObject);
+            GameLogger.Warning("Managers", $"파괴 후 s_instance 상태: Active={s_instance.gameObject.activeInHierarchy}, Enabled={s_instance.enabled}");
             return;
         }
 
@@ -365,10 +379,10 @@ public class Managers : MonoBehaviour
 
     private void Update()
     {
-        // ✅ 디버깅: Update가 호출되는지 확인 (첫 5프레임만)
-        if (Time.frameCount <= 5)
+        // ✅ 디버깅: Update가 호출되는지 확인 (모든 프레임)
+        if (Time.frameCount <= 100) // 첫 100프레임 전부 로그
         {
-            GameLogger.Info("Managers", $"Update() 호출! (프레임: {Time.frameCount})");
+            GameLogger.Info("Managers", $"Update() 호출! (프레임: {Time.frameCount}, Scene: {gameObject.scene.name})");
         }
 
         PublishAction(ActionId.System_Update);
