@@ -244,17 +244,30 @@ public class BrickGameManager
     /// </summary>
     public void OnUpdate()
     {
-        if (!_state.IsGameActive) return;
-        
+        // ✅ 디버깅: OnUpdate가 호출되는지 확인 (첫 5프레임만)
+        if (Time.frameCount <= 5)
+        {
+            GameLogger.Info("BrickGameManager", $"OnUpdate 호출됨! (프레임: {Time.frameCount}, IsGameActive: {_state.IsGameActive})");
+        }
+
+        if (!_state.IsGameActive)
+        {
+            if (Time.frameCount <= 5)
+            {
+                GameLogger.Warning("BrickGameManager", "게임이 활성화되지 않아 OnUpdate 스킵");
+            }
+            return;
+        }
+
         // 입력 처리
         _inputManager.UpdateInput();
-        
+
         // 패들 이동 처리
         _plankManager.UpdateMovement(_timeProvider.DeltaTime);
-        
+
         // BallManager 파워 타이머 업데이트
         _ballManager.UpdatePowerTimer(_timeProvider.DeltaTime);
-        
+
         // 시간 체크하여 새 행 생성 여부 결정
         if (_timeProvider.CurrentTime >= _state.NextSpawnTime)
         {

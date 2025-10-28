@@ -97,25 +97,24 @@ public class PlankManager
     /// </summary>
     public void UpdateMovement(float deltaTime)
     {
+        // ✅ 디버깅: 조건 체크 (BB 브랜치의 상세 로그 유지)
         if (!_enabled)
         {
-            GameLogger.DevLog("PlankManager", "PlankManager가 비활성화됨 (_enabled == false)");
+            GameLogger.Warning("PlankManager", "UpdateMovement: _enabled = false");
             return;
         }
-
         if (_plank == null)
         {
-            GameLogger.DevLog("PlankManager", "PhysicsPlank가 null");
+            GameLogger.Warning("PlankManager", "UpdateMovement: _plank = null");
             return;
         }
-
         if (_inputManager == null)
         {
-            GameLogger.DevLog("PlankManager", "InputManager가 null");
+            GameLogger.Warning("PlankManager", "UpdateMovement: _inputManager = null");
             return;
         }
 
-        // ✅ 멀티플레이어 Owner가 아니면 입력 처리 안 함 (다른 플레이어의 패들)
+        // ✅ 멀티플레이어 Owner가 아니면 입력 처리 안 함 (리팩토링: IsNetworkMode() 사용)
         if (_plank.IsNetworkMode() && !_plank.IsOwner)
         {
             GameLogger.DevLog("PlankManager", "다른 플레이어의 패들 (IsOwner=false) - 입력 처리 건너뜀");
@@ -127,6 +126,7 @@ public class PlankManager
         switch (_inputManager.CurrentInputType)
         {
             case InputManager.InputType.Keyboard:
+                GameLogger.Info("PlankManager", $"키보드 입력 처리 중 (horizontal: {_inputManager.HorizontalInput})");
                 ProcessKeyboardMovement(deltaTime);
                 break;
 
@@ -145,16 +145,22 @@ public class PlankManager
     {
         float horizontal = _inputManager.HorizontalInput;
 
-        if (Mathf.Abs(horizontal) < 0.01f) return;
+        if (Mathf.Abs(horizontal) < 0.01f)
+        {
+            // BB 브랜치의 디버깅 로그 유지 (horizontal이 0일 때)
+            GameLogger.Warning("PlankManager", $"ProcessKeyboardMovement: horizontal 입력이 0입니다 ({horizontal})");
+            return;
+        }
 
         Vector3 beforePosition = _plank.transform.position;
 
-        // ✅ PhysicsPlank에 이동 위임 (코드 중복 제거)
+        // ✅ PhysicsPlank에 이동 위임 (리팩토링: 코드 중복 제거)
         _plank.MoveByKeyboard(horizontal, deltaTime);
 
         Vector3 afterPosition = _plank.transform.position;
 
-        GameLogger.DevLog("PlankManager", $"🎮 패들 이동 (키보드): {beforePosition.x:F2} → {afterPosition.x:F2}");
+        // BB 브랜치의 Info 로그 유지
+        GameLogger.Info("PlankManager", $"🎮 패들 이동 (키보드): {beforePosition.x:F2} → {afterPosition.x:F2}");
         OnPlankMoved?.Invoke(afterPosition);
     }
 

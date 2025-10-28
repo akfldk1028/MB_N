@@ -323,7 +323,19 @@ public class Managers : MonoBehaviour
 
     private void Update()
     {
+        // ✅ 디버깅: Update가 호출되는지 확인 (첫 5프레임만)
+        if (Time.frameCount <= 5)
+        {
+            GameLogger.Info("Managers", $"Update() 호출! (프레임: {Time.frameCount})");
+        }
+
         PublishAction(ActionId.System_Update);
+
+        // ✅ 디버깅: Publish 확인
+        if (Time.frameCount <= 5)
+        {
+            GameLogger.Info("Managers", $"ActionId.System_Update 발행됨!");
+        }
     }
 
     private void LateUpdate()

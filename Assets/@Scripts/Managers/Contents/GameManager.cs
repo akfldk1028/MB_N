@@ -26,7 +26,8 @@ public class GameManager
 {
 	#region BrickGame
 	private BrickGameManager _brickGame;
-	
+	private IDisposable _brickGameUpdateSubscription; // ✅ GC 방지용 구독 저장
+
 	/// <summary>
 	/// 벽돌깨기 게임 매니저 접근자
 	/// Managers.Game.BrickGame 형태로 사용
@@ -70,10 +71,19 @@ public class GameManager
 		
 		// BrickGame 초기화
 		_brickGame.Initialize(brickPlacer, scoreDisplay, timeProvider, plank, mainCamera, settings);
-		
-		// ActionBus에 Update 구독
-		Managers.Subscribe(ActionId.System_Update, _brickGame.OnUpdate);
-		
+
+		// ActionBus에 Update 구독 (✅ GC 방지를 위해 필드에 저장!)
+		GameLogger.Info("GameManager", "ActionBus에 BrickGame.OnUpdate 구독 시작...");
+		_brickGameUpdateSubscription = Managers.Subscribe(ActionId.System_Update, _brickGame.OnUpdate);
+		if (_brickGameUpdateSubscription != null)
+		{
+			GameLogger.Success("GameManager", "✅ ActionBus 구독 성공! (필드에 저장하여 GC 방지)");
+		}
+		else
+		{
+			GameLogger.Error("GameManager", "❌ ActionBus 구독 실패! BrickGame이 업데이트되지 않습니다.");
+		}
+
 		GameLogger.Success("GameManager", "BrickGame 초기화 완료!");
 	}
 
