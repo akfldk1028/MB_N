@@ -93,22 +93,38 @@ public class PlankManager
     
     /// <summary>
     /// 매 프레임 패들 이동 처리
+    /// 싱글플레이어 전용 - 멀티플레이어일 때는 PhysicsPlank.Update()에서 자체 처리
     /// </summary>
     public void UpdateMovement(float deltaTime)
     {
-        if (!_enabled || _plank == null || _inputManager == null) return;
+        if (!_enabled)
+        {
+            GameLogger.DevLog("PlankManager", "PlankManager가 비활성화됨 (_enabled == false)");
+            return;
+        }
 
-        // ✅ 멀티플레이: Owner만 입력 처리 (BaseObject는 NetworkBehaviour 상속)
+        if (_plank == null)
+        {
+            GameLogger.DevLog("PlankManager", "PhysicsPlank가 null");
+            return;
+        }
+
+        if (_inputManager == null)
+        {
+            GameLogger.DevLog("PlankManager", "InputManager가 null");
+            return;
+        }
+
+        // ✅ 멀티플레이어 모드 체크: NetworkObject로 스폰되었으면 PhysicsPlank.Update()에서 처리
         var baseObject = _plank as Unity.Assets.Scripts.Objects.BaseObject;
         if (baseObject != null && baseObject.IsSpawned)
         {
-            // NetworkObject로 스폰된 경우 Owner만 입력 처리
-            if (!baseObject.IsOwner)
-            {
-                return; // 다른 플레이어의 패들은 조작 불가
-            }
+            // NetworkObject로 스폰된 경우, PhysicsPlank.Update()에서 입력 처리하므로 여기서는 return
+            GameLogger.DevLog("PlankManager", $"멀티플레이어 모드 (IsSpawned=true, IsOwner={baseObject.IsOwner}) - PhysicsPlank.Update()에서 처리");
+            return;
         }
 
+        // ✅ 싱글플레이어 모드: PlankManager가 입력 처리
         // 현재 입력 타입에 따라 이동 처리
         switch (_inputManager.CurrentInputType)
         {
