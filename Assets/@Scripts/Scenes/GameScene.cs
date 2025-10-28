@@ -12,10 +12,32 @@ public class GameScene : BaseScene
 
 		SceneType = EScene.GameScene;
 
+		// ✅ ObjectPlacement GameObject 자동 생성 (Inspector 불필요)
+		EnsureObjectPlacementExists();
+
 		// 벽돌깨기 게임 초기화 (씬 오브젝트 자동 탐색)
 		InitializeBrickGame();
 
 		return true;
+	}
+
+	/// <summary>
+	/// ObjectPlacement GameObject가 없으면 자동 생성
+	/// </summary>
+	private void EnsureObjectPlacementExists()
+	{
+		// 이미 존재하는지 확인
+		ObjectPlacement existing = FindFirstObjectByType<ObjectPlacement>();
+		if (existing != null)
+		{
+			GameLogger.Info("GameScene", "ObjectPlacement가 이미 존재합니다.");
+			return;
+		}
+
+		// 없으면 새로 생성
+		GameObject placerObj = new GameObject("ObjectPlacement");
+		placerObj.AddComponent<ObjectPlacement>();
+		GameLogger.Success("GameScene", "ObjectPlacement GameObject 자동 생성 완료!");
 	}
 
 	private void InitializeBrickGame()

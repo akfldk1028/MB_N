@@ -42,10 +42,109 @@ public class ObjectPlacement : MonoBehaviour, IBrickPlacer
     private float initialSpawnYOffset = 0f; // 생성 시 Y 오프셋 (topBorder 위치에서 생성)
     private Dictionary<GameObject, bool> activeObjectData = new Dictionary<GameObject, bool>();
     private const float BottomBoundary = -2.3f;
-    
+
     private void Awake()
     {
+        // ✅ Inspector 없이 자동 초기화
+        AutoInitializeReferences();
         ValidatePrefabs();
+    }
+
+    /// <summary>
+    /// Inspector 없이 모든 참조 자동 설정
+    /// </summary>
+    private void AutoInitializeReferences()
+    {
+        // 1. 경계(Boundary) 자동 찾기
+        if (leftBorder == null)
+        {
+            GameObject leftObj = GameObject.Find("LeftEnd");
+            if (leftObj != null)
+            {
+                leftBorder = leftObj.transform;
+                GameLogger.Info("ObjectPlacement", "LeftEnd 자동 탐색 완료");
+            }
+            else
+            {
+                GameLogger.Warning("ObjectPlacement", "LeftEnd를 찾을 수 없습니다. 기본값 생성");
+                leftBorder = new GameObject("LeftEnd_Auto").transform;
+                leftBorder.position = new Vector3(-8f, 0, 0);
+            }
+        }
+
+        if (rightBorder == null)
+        {
+            GameObject rightObj = GameObject.Find("RightEnd");
+            if (rightObj != null)
+            {
+                rightBorder = rightObj.transform;
+                GameLogger.Info("ObjectPlacement", "RightEnd 자동 탐색 완료");
+            }
+            else
+            {
+                GameLogger.Warning("ObjectPlacement", "RightEnd를 찾을 수 없습니다. 기본값 생성");
+                rightBorder = new GameObject("RightEnd_Auto").transform;
+                rightBorder.position = new Vector3(8f, 0, 0);
+            }
+        }
+
+        if (topBorder == null)
+        {
+            GameObject topObj = GameObject.Find("TopBorder");
+            if (topObj != null)
+            {
+                topBorder = topObj.transform;
+                GameLogger.Info("ObjectPlacement", "TopBorder 자동 탐색 완료");
+            }
+            else
+            {
+                GameLogger.Warning("ObjectPlacement", "TopBorder를 찾을 수 없습니다. 기본값 생성");
+                topBorder = new GameObject("TopBorder_Auto").transform;
+                topBorder.position = new Vector3(0, 4f, 0);
+            }
+        }
+
+        // 2. 프리팹 자동 로드 (Resources)
+        if (brickPrefab == null)
+        {
+            brickPrefab = Resources.Load<GameObject>("GameScene/Model/brick");
+            if (brickPrefab != null)
+            {
+                GameLogger.Success("ObjectPlacement", "brick 프리팹 자동 로드 완료");
+            }
+            else
+            {
+                GameLogger.Error("ObjectPlacement", "brick 프리팹을 찾을 수 없습니다! @Resources/GameScene/Model/brick.prefab 확인");
+            }
+        }
+
+        if (bonusBallPrefab == null)
+        {
+            bonusBallPrefab = Resources.Load<GameObject>("GameScene/Model/bonusBall");
+            if (bonusBallPrefab != null)
+            {
+                GameLogger.Info("ObjectPlacement", "bonusBall 프리팹 자동 로드 완료");
+            }
+            else
+            {
+                GameLogger.Warning("ObjectPlacement", "bonusBall 프리팹을 찾을 수 없습니다 (선택)");
+            }
+        }
+
+        if (starPrefab == null)
+        {
+            starPrefab = Resources.Load<GameObject>("GameScene/Model/star");
+            if (starPrefab != null)
+            {
+                GameLogger.Info("ObjectPlacement", "star 프리팹 자동 로드 완료");
+            }
+            else
+            {
+                GameLogger.Warning("ObjectPlacement", "star 프리팹을 찾을 수 없습니다 (선택)");
+            }
+        }
+
+        GameLogger.Success("ObjectPlacement", "모든 참조 자동 초기화 완료!");
     }
     
     private void ValidatePrefabs()
