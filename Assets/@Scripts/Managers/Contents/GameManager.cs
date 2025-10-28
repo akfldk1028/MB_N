@@ -70,10 +70,19 @@ public class GameManager
 		
 		// BrickGame 초기화
 		_brickGame.Initialize(brickPlacer, scoreDisplay, timeProvider, plank, mainCamera, settings);
-		
+
 		// ActionBus에 Update 구독
-		Managers.Subscribe(ActionId.System_Update, _brickGame.OnUpdate);
-		
+		GameLogger.Info("GameManager", "ActionBus에 BrickGame.OnUpdate 구독 시작...");
+		var subscription = Managers.Subscribe(ActionId.System_Update, _brickGame.OnUpdate);
+		if (subscription != null)
+		{
+			GameLogger.Success("GameManager", "ActionBus 구독 성공! BrickGame.OnUpdate가 매 프레임 호출됩니다.");
+		}
+		else
+		{
+			GameLogger.Error("GameManager", "ActionBus 구독 실패! BrickGame이 업데이트되지 않습니다.");
+		}
+
 		GameLogger.Success("GameManager", "BrickGame 초기화 완료!");
 	}
 
