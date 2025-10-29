@@ -19,16 +19,10 @@ public class BrickGameManager
     #endregion
     
     #region Sub-Managers
-    private InputManager _inputManager;
+    // ✅ InputManager 제거: 전역 Managers.Input 사용
     private PlankManager _plankManager;
     private BallManager _ballManager;
     private BrickManager _brickManager;
-    
-    /// <summary>
-    /// 입력 관리 매니저 접근자
-    /// Managers.Game.BrickGame.Input 형태로 사용
-    /// </summary>
-    public InputManager Input => _inputManager;
     
     /// <summary>
     /// 패들(Plank) 관리 매니저 접근자
@@ -63,7 +57,7 @@ public class BrickGameManager
     public BrickGameManager()
     {
         _state = new BrickGameState();
-        _inputManager = new InputManager();
+        // ✅ InputManager 제거: 전역 Managers.Input 사용
         _plankManager = new PlankManager();
         _ballManager = new BallManager();
         _brickManager = new BrickManager();
@@ -104,8 +98,8 @@ public class BrickGameManager
         }
         
         // Sub-Managers 초기화
-        _inputManager.Initialize();
-        _plankManager.Initialize(plank, _inputManager, mainCamera);
+        // ✅ InputManager 제거: 전역 Managers.Input이 ActionBus를 통해 입력 발행
+        _plankManager.Initialize(plank, mainCamera);
         _ballManager.Initialize();
         _brickManager.Initialize();
         
@@ -125,21 +119,20 @@ public class BrickGameManager
             // return 제거 - 게임은 계속 진행
         }
 
-        _state.CurrentPhase = GamePhase.Playing;
-        _state.CurrentSpawnInterval = _settings.spawnInterval;
-        _state.NextSpawnTime = _timeProvider.CurrentTime + _settings.initialSpawnDelay;
-        
-        // 상태 초기화
+        // ✅ 먼저 상태 초기화 (Reset()이 CurrentPhase를 Idle로 되돌림)
+        _state.Reset();
         _state.ResetRowsSpawned();
         _state.ResetScore();
         UpdateScoreDisplay();
         
-        // 게임 상태 초기화 (CommonVars 대체)
-        _state.Reset();
+        // ✅ 그 다음 게임 시작 상태로 설정
+        _state.CurrentPhase = GamePhase.Playing;
         _state.CurrentLevel = _settings.initialLevel;
+        _state.CurrentSpawnInterval = _settings.spawnInterval;
+        _state.NextSpawnTime = _timeProvider.CurrentTime + _settings.initialSpawnDelay;
         
         // Sub-Managers 초기화
-        _inputManager.Enabled = true;
+        // ✅ 전역 InputManager는 GameScene에서 GameMode로 제어됨
         _plankManager.Enabled = true;
         _plankManager.ResetPosition();
         _ballManager.Initialize();
@@ -159,6 +152,7 @@ public class BrickGameManager
         OnGameStart?.Invoke();
         
         GameLogger.Success("BrickGameManager", $"게임 시작! (초기 레벨: {_settings.initialLevel})");
+        GameLogger.Warning("BrickGameManager", $"🔥 StartGame() 완료! CurrentPhase: {_state.CurrentPhase}, IsGameActive: {_state.IsGameActive}");
     }
     
     /// <summary>
@@ -167,7 +161,7 @@ public class BrickGameManager
     public void PauseGame()
     {
         _state.CurrentPhase = GamePhase.Paused;
-        _inputManager.Enabled = false;
+        // ✅ 전역 InputManager는 GameMode로 제어 (필요 시 Managers.Input.SetGameMode(None) 호출)
         _plankManager.Enabled = false;
         OnGamePause?.Invoke();
         GameLogger.Info("BrickGameManager", "게임 일시정지");
@@ -179,7 +173,7 @@ public class BrickGameManager
     public void ResumeGame()
     {
         _state.CurrentPhase = GamePhase.Playing;
-        _inputManager.Enabled = true;
+        // ✅ 전역 InputManager는 GameMode로 제어됨
         _plankManager.Enabled = true;
         OnGameResume?.Invoke();
         GameLogger.Info("BrickGameManager", "게임 재개");
@@ -244,25 +238,30 @@ public class BrickGameManager
     /// </summary>
     public void OnUpdate()
     {
-        // ✅ 디버깅: OnUpdate가 호출되는지 확인 (첫 5프레임만)
-        if (Time.frameCount <= 5)
+        // ✅ 디버깅: OnUpdate가 호출되는지 확인 (매 60프레임마다)
+        if (Time.frameCount % 60 == 0)
         {
             GameLogger.Info("BrickGameManager", $"OnUpdate 호출됨! (프레임: {Time.frameCount}, IsGameActive: {_state.IsGameActive})");
         }
 
         if (!_state.IsGameActive)
         {
-            if (Time.frameCount <= 5)
+            if (Time.frameCount % 60 == 0)
             {
                 GameLogger.Warning("BrickGameManager", "게임이 활성화되지 않아 OnUpdate 스킵");
             }
             return;
         }
 
-        // 입력 처리
-        _inputManager.UpdateInput();
+        // ✅ 입력 처리: 전역 Managers.Input이 ActionBus를 통해 방향키 입력 발행
+        // PlankManager가 ActionBus의 Input_ArrowKey 이벤트 구독하여 자동 처리됨
 
         // 패들 이동 처리
+        if (_plankManager == null)
+        {
+            GameLogger.Error("BrickGameManager", "❌ _plankManager가 null입니다!");
+            return;
+        }
         _plankManager.UpdateMovement(_timeProvider.DeltaTime);
 
         // BallManager 파워 타이머 업데이트

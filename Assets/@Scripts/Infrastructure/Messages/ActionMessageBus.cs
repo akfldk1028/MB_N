@@ -19,6 +19,12 @@ namespace MB.Infrastructure.Messages
                 return;
             }
 
+            // ✅ 디버깅: System_Update 발행 확인 (첫 5프레임)
+            if (message.Id == ActionId.System_Update && Time.frameCount <= 5)
+            {
+                Debug.Log($"[ActionMessageBus] System_Update 발행! (프레임: {Time.frameCount})");
+            }
+
             _channel.Publish(message);
         }
 
@@ -38,10 +44,21 @@ namespace MB.Infrastructure.Messages
         {
             if (handler == null) throw new ArgumentNullException(nameof(handler));
 
+            // ✅ 디버깅: System_Update 구독 확인
+            if (actionId == ActionId.System_Update)
+            {
+                Debug.Log($"[ActionMessageBus] System_Update 구독됨! Handler: {handler.Method.Name}");
+            }
+
             return _channel.Subscribe(message =>
             {
                 if (message.Id == actionId)
                 {
+                    // ✅ 디버깅: System_Update 메시지 수신 확인 (첫 5프레임)
+                    if (actionId == ActionId.System_Update && Time.frameCount <= 5)
+                    {
+                        Debug.Log($"[ActionMessageBus] System_Update 수신! → {handler.Method.Name} 호출");
+                    }
                     handler(message);
                 }
             });

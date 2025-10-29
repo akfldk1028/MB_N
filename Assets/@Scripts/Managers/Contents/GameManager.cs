@@ -60,6 +60,14 @@ public class GameManager
 			return;
 		}
 		
+		// ✅ 기존 구독 해제 (중복 구독 방지)
+		if (_brickGameUpdateSubscription != null)
+		{
+			GameLogger.Warning("GameManager", "기존 BrickGame 구독 해제 중...");
+			_brickGameUpdateSubscription.Dispose();
+			_brickGameUpdateSubscription = null;
+		}
+		
 		// 설정이 없으면 기본값 사용
 		if (settings == null)
 		{

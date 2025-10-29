@@ -62,17 +62,55 @@ public class Managers : MonoBehaviour
     #endregion
 
     #region Contents
-    private GameManager _game = new GameManager();
-    private ObjectManager _object = new ObjectManager();
-    private MapManager _map = new MapManager();
+    // ✅ static singleton으로 변경 (Managers 재생성 시에도 유지)
+    private static InputManager s_input = null;
+    private static GameManager s_game = null;
+    private static ObjectManager s_object = null;
+    private static MapManager s_map = null;
 
-    public static GameManager Game { get { return Instance?._game; } }
-    public static ObjectManager Object { get { return Instance?._object; } }
-    public static MapManager Map { get { return Instance?._map; } }
+    /// <summary>
+    /// 전역 입력 매니저 (모든 게임 모드에서 공유)
+    /// </summary>
+    public static InputManager Input { 
+        get { 
+            if (s_input == null) {
+                s_input = new InputManager();
+                GameLogger.Info("Managers", "InputManager 생성됨 (static singleton)");
+            }
+            return s_input; 
+        } 
+    }
+    
+    public static GameManager Game { 
+        get { 
+            if (s_game == null) {
+                s_game = new GameManager();
+                GameLogger.Info("Managers", "GameManager 생성됨 (static singleton)");
+            }
+            return s_game; 
+        } 
+    }
+    public static ObjectManager Object { 
+        get { 
+            if (s_object == null) {
+                s_object = new ObjectManager();
+            }
+            return s_object; 
+        } 
+    }
+    public static MapManager Map { 
+        get { 
+            if (s_map == null) {
+                s_map = new MapManager();
+            }
+            return s_map; 
+        } 
+    }
     #endregion
 
     #region Core
-    private readonly MB.Infrastructure.Messages.ActionMessageBus _actionBus = new MB.Infrastructure.Messages.ActionMessageBus();
+    // ✅ ActionBus를 static으로 변경하여 모든 Managers 인스턴스가 공유
+    private static MB.Infrastructure.Messages.ActionMessageBus s_actionBus = null;
     private MB.Infrastructure.Messages.ActionDispatcher _actionDispatcher;
     private StateMachine _stateMachine;
 
@@ -82,7 +120,7 @@ public class Managers : MonoBehaviour
     private SceneManagerEx _scene = new SceneManagerEx();
     private UIManager _ui = new UIManager();
 
-    public static MB.Infrastructure.Messages.ActionMessageBus ActionBus { get { return Instance?._actionBus; } }
+    public static MB.Infrastructure.Messages.ActionMessageBus ActionBus { get { return s_actionBus; } }
     public static StateMachine StateMachine { get { return Instance?._stateMachine; } }
     public static DataManager Data { get { return Instance?._data; } }
     public static PoolManager Pool { get { return Instance?._pool; } }
@@ -114,6 +152,7 @@ public class Managers : MonoBehaviour
         // 중복 체크
         if (s_instance != null && s_instance != this)
         {
+            GameLogger.Warning("Managers", "중복된 Managers 인스턴스 발견! 파괴합니다.");
             Destroy(gameObject);
             return;
         }
@@ -121,19 +160,30 @@ public class Managers : MonoBehaviour
         s_instance = this;
         DontDestroyOnLoad(gameObject);
 
+        // ✅ ActionBus를 static으로 한 번만 생성
+        if (s_actionBus == null)
+        {
+            s_actionBus = new MB.Infrastructure.Messages.ActionMessageBus();
+            GameLogger.Success("Managers", "ActionBus 생성됨 (static)");
+        }
+
         // 메시지 시스템 초기화
         GameLogger.Progress("Managers", "Infrastructure 시스템 초기화 중...");
         if (_actionDispatcher == null)
         {
-            _actionDispatcher = new MB.Infrastructure.Messages.ActionDispatcher(_actionBus);
+            _actionDispatcher = new MB.Infrastructure.Messages.ActionDispatcher(s_actionBus);
             GameLogger.Success("Managers", "ActionDispatcher 생성됨");
         }
 
         if (_stateMachine == null)
         {
-            _stateMachine = new StateMachine(_actionBus);
+            _stateMachine = new StateMachine(s_actionBus);
             GameLogger.Success("Managers", "StateMachine 생성됨");
         }
+
+        // ✅ InputManager 초기화 (System_Update 구독)
+        Input.Init();
+        GameLogger.Success("Managers", "InputManager 초기화 완료 (System_Update 구독)");
 
         // 네트워크 컴포넌트 초기화
         await InitializeNetworkComponents();
@@ -323,16 +373,16 @@ public class Managers : MonoBehaviour
 
     private void Update()
     {
-        // ✅ 디버깅: Update가 호출되는지 확인 (첫 5프레임만)
-        if (Time.frameCount <= 5)
+        // ✅ 디버깅: Update가 호출되는지 확인 (매 60프레임마다)
+        if (Time.frameCount % 60 == 0)
         {
-            GameLogger.Info("Managers", $"Update() 호출! (프레임: {Time.frameCount})");
+            GameLogger.Info("Managers", $"Update() 호출 중! (프레임: {Time.frameCount}, enabled: {enabled}, activeInHierarchy: {gameObject.activeInHierarchy})");
         }
 
         PublishAction(ActionId.System_Update);
 
-        // ✅ 디버깅: Publish 확인
-        if (Time.frameCount <= 5)
+        // ✅ 디버깅: Publish 확인 (매 60프레임마다)
+        if (Time.frameCount % 60 == 0)
         {
             GameLogger.Info("Managers", $"ActionId.System_Update 발행됨!");
         }
@@ -350,9 +400,24 @@ public class Managers : MonoBehaviour
 
     private void OnDestroy()
     {
-        _stateMachine?.Dispose();
-        _actionDispatcher?.Dispose();
-        _actionBus?.Dispose();
+        // ✅ 디버깅: OnDestroy 호출 확인
+        GameLogger.Warning("Managers", $"OnDestroy 호출됨! (s_instance == this: {s_instance == this})");
+        
+        // ✅ 이 인스턴스가 싱글톤 인스턴스인 경우에만 정리
+        if (s_instance == this)
+        {
+            GameLogger.Error("Managers", "싱글톤 인스턴스가 파괴되고 있습니다! ActionBus는 유지됩니다.");
+            _stateMachine?.Dispose();
+            _actionDispatcher?.Dispose();
+            // ✅ ActionBus는 static이므로 Dispose하지 않음 (다른 씬에서 재사용)
+            // s_actionBus?.Dispose();
+            s_instance = null;
+            Initialized = false;
+        }
+        else
+        {
+            GameLogger.Info("Managers", "중복 인스턴스가 파괴되었습니다 (정상)");
+        }
     }
 
     #region Public Methods
