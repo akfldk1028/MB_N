@@ -146,8 +146,11 @@ namespace Unity.Assets.Scripts.Objects
             }
         }
 
-        protected virtual void Start() // virtual로 선언하여 혹시 모를 자식 클래스 오버라이드 허용
+        protected virtual void Start()
         {
+            // ✅ 표준 벽돌깨기 물리 설정 (stuck 방지!)
+            SetupPhysicsMaterial();
+            
             // 패들 Collider 캐싱
             if (plank != null)
             {
@@ -159,20 +162,47 @@ namespace Unity.Assets.Scripts.Objects
             }
             else
             {
-                GameLogger.Warning("PhysicsBall", $"{gameObject.name}: 패들이 할당되지 않았습니다! Inspector에서 PhysicsPlank를 할당하세요.");
+                GameLogger.Warning("PhysicsBall", $"{gameObject.name}: 패들이 할당되지 않았습니다!");
             }
             
-            // 서버에서만 초기 상태 설정 및 위치 조정
+            // 서버에서만 초기 상태 설정
             if (IsServer || !IsSpawned)
             {
-                 ResetBallToReadyState(); // 초기 상태 및 위치 설정
+                 ResetBallToReadyState();
             }
             
-            // 렌더러 컴포넌트 참조 초기화
+            // 렌더러 컴포넌트 참조
             if (ballRenderer == null)
             {
                 ballRenderer = GetComponent<Renderer>() ?? ballModel?.GetComponent<Renderer>();
             }
+        }
+        
+        /// <summary>
+        /// 표준 벽돌깨기 물리 설정 (Box2D 기준) - stuck 방지
+        /// </summary>
+        private void SetupPhysicsMaterial()
+        {
+            if (rb == null) return;
+            
+            // PhysicsMaterial2D 생성
+            PhysicsMaterial2D ballMaterial = new PhysicsMaterial2D();
+            ballMaterial.friction = 0f;      // 마찰 0
+            ballMaterial.bounciness = 1f;    // 완벽한 탄성
+            
+            // Collider에 적용
+            if (objectCollider != null)
+            {
+                objectCollider.sharedMaterial = ballMaterial;
+            }
+            
+            // Rigidbody2D 설정
+            rb.gravityScale = 0f;
+            rb.linearDamping = 0f;
+            rb.angularDamping = 0f;
+            rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
+            
+            GameLogger.Success("PhysicsBall", "✅ 표준 물리: Friction=0, Bounce=1, Gravity=0");
         }
 
         public void Update()
@@ -536,8 +566,7 @@ namespace Unity.Assets.Scripts.Objects
 
                 if (launchInput)
                 {
-                    LaunchBall(launchDirection); // 설정된 기본 방향으로 발사
-                    CurrentState = EBallState.Launching;
+                    LaunchBallInstant(launchDirection); // ✅ 즉시 발사 (부드럽게)
                 }
                 
                 // 이전 패들 위치 업데이트
@@ -587,7 +616,31 @@ namespace Unity.Assets.Scripts.Objects
         #endregion
         
         #region Ball Specific Methods
-        // 볼 발사 메서드
+        /// <summary>
+        /// 즉시 공 발사 (표준 벽돌깨기 방식)
+        /// - Kinematic 해제 즉시
+        /// - Velocity 직접 설정 (Impulse보다 부드러움)
+        /// - Moving 상태로 즉시 전환 (Launching 스킵)
+        /// </summary>
+        public void LaunchBallInstant(Vector2 direction)
+        {
+            if (rb == null) return;
+            
+            // ✅ 1. Kinematic 즉시 해제
+            rb.isKinematic = false;
+            
+            // ✅ 2. Velocity 직접 설정 (Impulse보다 즉각적이고 부드러움)
+            float speed = launchForce; // launchForce를 속도로 사용
+            rb.linearVelocity = direction.normalized * speed;
+            rb.angularVelocity = 0f; // 회전 초기화
+            
+            // ✅ 3. 즉시 Moving 상태로 전환 (Launching 스킵)
+            CurrentState = EBallState.Moving;
+            
+            GameLogger.Info("PhysicsBall", $"공 즉시 발사! 속도: {speed}, 방향: {direction}");
+        }
+        
+        // 기존 볼 발사 메서드 (멀티볼용)
         public void LaunchBall(Vector2 direction)
         {
             if (rb != null)

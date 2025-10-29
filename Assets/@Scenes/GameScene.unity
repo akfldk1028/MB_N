@@ -216,6 +216,18 @@ PrefabInstance:
       propertyPath: m_LocalPosition.y
       value: 3.89
       objectReference: {fileID: 0}
+    - target: {fileID: 585320169495028315, guid: 1c1e3324c5c17cf4884a418e2d996627, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 4.44
+      objectReference: {fileID: 0}
+    - target: {fileID: 725755405128823653, guid: 1c1e3324c5c17cf4884a418e2d996627, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 10802e7c835d45d498b9e601fed88395, type: 2}
+    - target: {fileID: 778349958165010632, guid: 1c1e3324c5c17cf4884a418e2d996627, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 1383545406662216764, guid: 1c1e3324c5c17cf4884a418e2d996627, type: 3}
       propertyPath: m_Name
       value: BrickGame
@@ -260,6 +272,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 1505520657222957101, guid: 1c1e3324c5c17cf4884a418e2d996627, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 4.55
+      objectReference: {fileID: 0}
     - target: {fileID: 1798520870624772761, guid: 1c1e3324c5c17cf4884a418e2d996627, type: 3}
       propertyPath: leftEnd
       value: 
@@ -280,6 +296,14 @@ PrefabInstance:
       propertyPath: m_AnchoredPosition.y
       value: 6.29
       objectReference: {fileID: 0}
+    - target: {fileID: 3304813424636249235, guid: 1c1e3324c5c17cf4884a418e2d996627, type: 3}
+      propertyPath: m_Size.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4460445403657183479, guid: 1c1e3324c5c17cf4884a418e2d996627, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 10802e7c835d45d498b9e601fed88395, type: 2}
     - target: {fileID: 4848210650607391698, guid: 1c1e3324c5c17cf4884a418e2d996627, type: 3}
       propertyPath: topBorder
       value: 
@@ -304,6 +328,14 @@ PrefabInstance:
       propertyPath: bonusBallPrefab
       value: 
       objectReference: {fileID: 1660242387830592, guid: cbf83497e9ba270478536edfbfcb9ade, type: 3}
+    - target: {fileID: 5043244930192495993, guid: 1c1e3324c5c17cf4884a418e2d996627, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 3.3510003
+      objectReference: {fileID: 0}
+    - target: {fileID: 5541465413677383648, guid: 1c1e3324c5c17cf4884a418e2d996627, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 6393847763707861588, guid: 1c1e3324c5c17cf4884a418e2d996627, type: 3}
       propertyPath: GlobalObjectIdHash
       value: 555332907
@@ -316,10 +348,22 @@ PrefabInstance:
       propertyPath: m_LocalPosition.y
       value: 11.99
       objectReference: {fileID: 0}
+    - target: {fileID: 6637567968545168516, guid: 1c1e3324c5c17cf4884a418e2d996627, type: 3}
+      propertyPath: m_Size.y
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 7266452239210672503, guid: 1c1e3324c5c17cf4884a418e2d996627, type: 3}
       propertyPath: scoreText
       value: 
       objectReference: {fileID: 1832450357}
+    - target: {fileID: 7433981729579259541, guid: 1c1e3324c5c17cf4884a418e2d996627, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 11.71
+      objectReference: {fileID: 0}
+    - target: {fileID: 8428060446416508288, guid: 1c1e3324c5c17cf4884a418e2d996627, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 4.55
+      objectReference: {fileID: 0}
     m_RemovedComponents:
     - {fileID: 7266452239210672503, guid: 1c1e3324c5c17cf4884a418e2d996627, type: 3}
     m_RemovedGameObjects: []

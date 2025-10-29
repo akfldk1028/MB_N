@@ -512,6 +512,18 @@ private List<PotentialSpawnInfo> CalculatePotentialSpawnPositions(int rowCount)
     
     private void MoveDownAllObjects()
     {
+        GameLogger.Warning("ObjectPlacement", $"🔽 MoveDownAllObjects 호출! 활성 블록 수: {activeObjectData.Count}");
+        
+        // ✅ 먼저 모든 블록을 false로 변경 (첫 행도 이제 이동 가능)
+        var keys = activeObjectData.Keys.ToList();
+        foreach (var key in keys)
+        {
+            if (key != null)
+            {
+                activeObjectData[key] = false;
+            }
+        }
+        
         List<GameObject> keysToRemove = new List<GameObject>();
         var currentActiveObjects = activeObjectData.ToList();
         
@@ -526,16 +538,10 @@ private List<PotentialSpawnInfo> CalculatePotentialSpawnPositions(int rowCount)
         foreach (KeyValuePair<GameObject, bool> pair in currentActiveObjects)
         {
             GameObject obj = pair.Key;
-            bool isFirstRow = pair.Value;
 
             if (obj == null)
             {
                 keysToRemove.Add(obj);
-                continue;
-            }
-
-            if (isFirstRow)
-            {
                 continue;
             }
 
@@ -549,6 +555,7 @@ private List<PotentialSpawnInfo> CalculatePotentialSpawnPositions(int rowCount)
             }
             else
             {
+                GameLogger.Info("ObjectPlacement", $"블록 이동: {obj.name} → Y={newY:F2}");
                 StartCoroutine(MoveDown(obj, newY));
             }
         }
@@ -580,6 +587,7 @@ private List<PotentialSpawnInfo> CalculatePotentialSpawnPositions(int rowCount)
     // 지정된 수의 행을 생성하는 메서드
     public void PlaceMultipleRows(int rowCount)
     {
+        GameLogger.Success("ObjectPlacement", $"✅ PlaceMultipleRows({rowCount}) 호출됨!");
         MoveDownAllObjects();
         
         // 지정된 행 수로 위치 계산
