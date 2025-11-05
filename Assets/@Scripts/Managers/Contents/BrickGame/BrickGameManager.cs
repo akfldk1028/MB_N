@@ -9,8 +9,6 @@ public class BrickGameManager
 {
     #region 의존성 (Dependency Injection)
     private IBrickPlacer _brickPlacer;
-    private IScoreDisplay _scoreDisplay;
-    private ITimeProvider _timeProvider;
     #endregion
     
     #region 설정 및 상태
@@ -76,25 +74,17 @@ public class BrickGameManager
     /// </summary>
     public void Initialize(
         IBrickPlacer brickPlacer,
-        IScoreDisplay scoreDisplay,
-        ITimeProvider timeProvider,
         PhysicsPlank plank,
         Camera mainCamera,
         BrickGameSettings settings)
     {
-        // brickPlacer와 scoreDisplay는 선택적 (1인 테스트에서는 불필요)
+        // brickPlacer는 선택적 (1인 테스트에서는 불필요)
         _brickPlacer = brickPlacer;
-        _scoreDisplay = scoreDisplay;
-        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _settings = settings ?? BrickGameSettings.CreateDefault();
         
         if (_brickPlacer == null)
         {
             GameLogger.Warning("BrickGameManager", "BrickPlacer가 null입니다. 벽돌 자동 생성 불가");
-        }
-        if (_scoreDisplay == null)
-        {
-            GameLogger.Warning("BrickGameManager", "ScoreDisplay가 null입니다. 점수 표시 불가");
         }
         
         // Sub-Managers 초기화
@@ -123,13 +113,15 @@ public class BrickGameManager
         _state.Reset();
         _state.ResetRowsSpawned();
         _state.ResetScore();
-        UpdateScoreDisplay();
+        
+        // 이벤트 발생 (UI가 구독하여 점수 업데이트)
+        OnScoreChanged?.Invoke(_state.CurrentScore);
         
         // ✅ 그 다음 게임 시작 상태로 설정
         _state.CurrentPhase = GamePhase.Playing;
         _state.CurrentLevel = _settings.initialLevel;
         _state.CurrentSpawnInterval = _settings.spawnInterval;
-        _state.NextSpawnTime = _timeProvider.CurrentTime + _settings.initialSpawnDelay;
+        _state.NextSpawnTime = Time.time + _settings.initialSpawnDelay;
         
         // Sub-Managers 초기화
         // ✅ 전역 InputManager는 GameScene에서 GameMode로 제어됨
@@ -197,7 +189,6 @@ public class BrickGameManager
     public void AddScore(int waveValue)
     {
         _state.AddScore(waveValue);
-        UpdateScoreDisplay();
         
         // 이벤트 발생
         OnScoreChanged?.Invoke(_state.CurrentScore);
@@ -262,13 +253,13 @@ public class BrickGameManager
             GameLogger.Error("BrickGameManager", "❌ _plankManager가 null입니다!");
             return;
         }
-        _plankManager.UpdateMovement(_timeProvider.DeltaTime);
+        _plankManager.UpdateMovement(Time.deltaTime);
 
         // BallManager 파워 타이머 업데이트
-        _ballManager.UpdatePowerTimer(_timeProvider.DeltaTime);
+        _ballManager.UpdatePowerTimer(Time.deltaTime);
 
         // 시간 체크하여 새 행 생성 여부 결정
-        if (_timeProvider.CurrentTime >= _state.NextSpawnTime)
+        if (Time.time >= _state.NextSpawnTime)
         {
             SpawnNewRow();
             AdjustDifficulty();
@@ -334,7 +325,7 @@ public class BrickGameManager
         _state.CurrentSpawnInterval = Mathf.Max(_state.CurrentSpawnInterval, _settings.minSpawnInterval);
         
         // 다음 스폰 시간 재설정
-        _state.NextSpawnTime = _timeProvider.CurrentTime + _state.CurrentSpawnInterval;
+        _state.NextSpawnTime = Time.time + _state.CurrentSpawnInterval;
     }
     
     /// <summary>
@@ -347,15 +338,7 @@ public class BrickGameManager
         _state.CurrentSpawnInterval = Mathf.Max(_state.CurrentSpawnInterval, _settings.minSpawnInterval);
         
         // 다음 스폰 시간 설정
-        _state.NextSpawnTime = _timeProvider.CurrentTime + _state.CurrentSpawnInterval;
-    }
-    
-    /// <summary>
-    /// 점수 UI 업데이트
-    /// </summary>
-    private void UpdateScoreDisplay()
-    {
-        _scoreDisplay?.UpdateScore(_state.CurrentScore);
+        _state.NextSpawnTime = Time.time + _state.CurrentSpawnInterval;
     }
     #endregion
     
